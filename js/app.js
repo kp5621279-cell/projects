@@ -13,7 +13,7 @@ class ZRApp {
   constructor() {
     this.isScrubbingTimeline = false;
     this.isScrubbingVolume = false;
-    this.appVersion = '0.2';
+    this.appVersion = '1.0';
     this.versionCheckTimer = null;
     this.versionStatus = 'checking';
     window.__ZR_VERSION__ = this.appVersion;

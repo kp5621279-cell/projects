@@ -90,8 +90,8 @@ const server = http.createServer((req, res) => {
   // --- API Endpoint: Remote Version Check ---
   if (pathname === '/api/version') {
     const versionUrls = [
-      'https://github.com/krishptl93-lang/management/raw/refs/heads/main/version.txt',
-      'https://raw.githubusercontent.com/krishptl93-lang/management/main/version.txt'
+      'https://github.com/kp5621279-cell/projects/raw/refs/heads/main/version.txt',
+      'https://raw.githubusercontent.com/kp5621279-cell/projects/main/version.txt'
     ];
 
     const respondWithVersion = (value) => {
