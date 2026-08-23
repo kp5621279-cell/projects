@@ -1,0 +1,17 @@
+{
+  "name": "ZR-beat",
+  "version": "1.0.0",
+  "description": "ZR Web Desktop Clone with Web Audio visualizer, synced lyrics, and playlist management",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "ZR",
+    "audio-player",
+    "web-desktop"
+  ],
+  "author": "recoon!",
+  "license": "MIT"
+}
