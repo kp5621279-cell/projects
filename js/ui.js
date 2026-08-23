@@ -545,9 +545,14 @@ class UIManager {
             <p class="playlist-badge">Your library</p>
             <h1 class="playlist-directory-title">Playlists</h1>
           </div>
-          <button class="btn-hero-play" data-action="open-create-playlist" title="Create playlist">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          </button>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn-icon-action" data-action="refresh-playlists" title="Refresh playlists">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10.5h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.67 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
+            <button class="btn-hero-play" data-action="open-create-playlist" title="Create playlist">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </button>
+          </div>
         </div>
 
         <div class="playlist-directory-grid">

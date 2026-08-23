@@ -13,7 +13,7 @@ class ZRApp {
   constructor() {
     this.isScrubbingTimeline = false;
     this.isScrubbingVolume = false;
-    this.appVersion = '0.3';
+    this.appVersion = '0.2';
     this.versionCheckTimer = null;
     this.versionStatus = 'checking';
     window.__ZR_VERSION__ = this.appVersion;
@@ -49,25 +49,13 @@ class ZRApp {
       this.versionStatus = isMismatch ? 'mismatch' : 'ok';
       window.__ZR_VERSION_STATUS__ = this.versionStatus;
 
-      if (!isMismatch) {
-        localStorage.setItem(storageKey, this.appVersion);
-        window.__ZR_UPDATE_MODAL_SHOWN__ = false;
-        const modal = document.getElementById('app-update-modal');
-        if (modal) modal.classList.add('hidden');
-        return;
-      }
-
-      if (savedVersion !== latestVersion) {
+      if (!savedVersion || savedVersion !== latestVersion) {
         localStorage.setItem(storageKey, latestVersion);
       }
 
-      const modal = document.getElementById('app-update-modal');
-      if (modal && !modal.classList.contains('hidden')) {
-        return;
+      if (isMismatch) {
+        ui.showAppUpdateModal();
       }
-
-      ui.showAppUpdateModal();
-      window.__ZR_UPDATE_MODAL_SHOWN__ = latestVersion;
     } catch (error) {
       console.warn('Version check failed:', error);
       this.versionStatus = 'error';
@@ -387,6 +375,18 @@ class ZRApp {
         case 'open-create-playlist':
           ui.openCreatePlaylistModal();
           break;
+        case 'refresh-playlists': {
+          if (!(await isUserSignedIn())) {
+            ui.showToast('Please sign in to sync playlists.');
+            break;
+          }
+          ui.showToast('Refreshing playlists...');
+          await storage.syncUserDataFromSupabase();
+          ui.renderSidebarPlaylists();
+          ui.navigateTo(ui.currentView || 'playlists', ui.currentParam || null);
+          ui.showToast('Playlists synced.');
+          break;
+        }
         case 'open-file-import':
           ui.openFileImportModal();
           break;
