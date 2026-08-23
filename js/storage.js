@@ -91,8 +91,8 @@ class StorageManager {
       return;
     }
 
-    this.userPlaylists = this.readJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), INITIAL_PLAYLISTS);
-    this.userLikedTrackIds = this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), ["track-1", "track-2", "track-5"]);
+    this.userPlaylists = [];
+    this.userLikedTrackIds = [];
   }
 
   async loadCurrentSession() {
@@ -110,12 +110,8 @@ class StorageManager {
   async syncUserDataFromSupabase() {
     if (!this.currentUserId) return;
 
-    const fallbackPlaylists = this.userPlaylists.length
-      ? this.userPlaylists
-      : this.readJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), INITIAL_PLAYLISTS);
-    const fallbackLiked = this.userLikedTrackIds.length
-      ? this.userLikedTrackIds
-      : this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), ["track-1", "track-2", "track-5"]);
+    const fallbackPlaylists = INITIAL_PLAYLISTS;
+    const fallbackLiked = ["track-1", "track-2", "track-5"];
 
     try {
       const [{ data: playlistsData = [], error: playlistsError }, { data: likedData = [], error: likedError }] = await Promise.all([
@@ -153,8 +149,8 @@ class StorageManager {
         }
       });
 
-      const nextPlaylists = syncedPlaylists.length ? syncedPlaylists : (fallbackPlaylists.length ? fallbackPlaylists : INITIAL_PLAYLISTS);
-      const nextLiked = (likedData || []).map(item => item.track_id).length ? (likedData || []).map(item => item.track_id) : (fallbackLiked.length ? fallbackLiked : ["track-1", "track-2", "track-5"]);
+      const nextPlaylists = syncedPlaylists.length ? syncedPlaylists : fallbackPlaylists;
+      const nextLiked = (likedData || []).map(item => item.track_id).length ? (likedData || []).map(item => item.track_id) : fallbackLiked;
 
       this.userPlaylists = nextPlaylists;
       this.userLikedTrackIds = nextLiked;
@@ -162,9 +158,9 @@ class StorageManager {
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
     } catch (error) {
-      console.warn('User playlist sync from Supabase unavailable; keeping local fallback data.', error);
-      this.userPlaylists = fallbackPlaylists.length ? fallbackPlaylists : INITIAL_PLAYLISTS;
-      this.userLikedTrackIds = fallbackLiked.length ? fallbackLiked : ["track-1", "track-2", "track-5"];
+      console.warn('User playlist sync from Supabase unavailable; using default seeded data.', error);
+      this.userPlaylists = fallbackPlaylists;
+      this.userLikedTrackIds = fallbackLiked;
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
     }
@@ -216,9 +212,7 @@ class StorageManager {
       if (!this.userLikedTrackIds.length) {
         this.syncUserDataFromSupabase();
       }
-      const liked = this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), ["track-1", "track-2", "track-5"]);
-      this.userLikedTrackIds = liked;
-      return liked;
+      return this.userLikedTrackIds.length ? this.userLikedTrackIds : ["track-1", "track-2", "track-5"];
     }
 
     try {
@@ -295,9 +289,7 @@ class StorageManager {
       if (!this.userPlaylists.length) {
         this.syncUserDataFromSupabase();
       }
-      const userPlaylists = this.userPlaylists.length ? this.userPlaylists : this.readJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), INITIAL_PLAYLISTS);
-      this.userPlaylists = userPlaylists.length ? userPlaylists : INITIAL_PLAYLISTS;
-      return this.userPlaylists;
+      return this.userPlaylists.length ? this.userPlaylists : INITIAL_PLAYLISTS;
     }
 
     try {
