@@ -212,7 +212,7 @@ class StorageManager {
       if (!this.userLikedTrackIds.length) {
         this.syncUserDataFromSupabase();
       }
-      return this.userLikedTrackIds.length ? this.userLikedTrackIds : ["track-1", "track-2", "track-5"];
+      return this.userLikedTrackIds.length ? this.userLikedTrackIds : [];
     }
 
     try {
@@ -289,7 +289,7 @@ class StorageManager {
       if (!this.userPlaylists.length) {
         this.syncUserDataFromSupabase();
       }
-      return this.userPlaylists.length ? this.userPlaylists : INITIAL_PLAYLISTS;
+      return this.userPlaylists.length ? this.userPlaylists : [];
     }
 
     try {
