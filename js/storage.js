@@ -110,31 +110,63 @@ class StorageManager {
   async syncUserDataFromSupabase() {
     if (!this.currentUserId) return;
 
+    const fallbackPlaylists = this.userPlaylists.length
+      ? this.userPlaylists
+      : this.readJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), INITIAL_PLAYLISTS);
+    const fallbackLiked = this.userLikedTrackIds.length
+      ? this.userLikedTrackIds
+      : this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), ["track-1", "track-2", "track-5"]);
+
     try {
-      const [{ data: playlistsData = [] }, { data: likedData = [] }] = await Promise.all([
+      const [{ data: playlistsData = [], error: playlistsError }, { data: likedData = [], error: likedError }] = await Promise.all([
         supabase.from('playlists').select('*').eq('user_id', this.currentUserId).order('updated_at', { ascending: false }),
         supabase.from('liked_tracks').select('track_id').eq('user_id', this.currentUserId)
       ]);
 
-      const syncedPlaylists = (playlistsData || []).map(p => ({
-        id: p.playlist_id || p.id,
-        title: p.title,
-        description: p.description || '',
-        curator: p.curator || 'You',
-        cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-        color: p.color || '#1e3264',
-        trackIds: Array.isArray(p.track_ids) ? p.track_ids : JSON.parse(p.track_ids || '[]')
-      }));
+      if (playlistsError) throw playlistsError;
+      if (likedError) throw likedError;
 
-      this.userPlaylists = syncedPlaylists.length ? syncedPlaylists : INITIAL_PLAYLISTS;
-      this.userLikedTrackIds = (likedData || []).map(item => item.track_id);
-      if (!this.userLikedTrackIds.length) {
-        this.userLikedTrackIds = ["track-1", "track-2", "track-5"];
-      }
+      const syncedPlaylists = (playlistsData || []).map(p => {
+        try {
+          const trackIds = Array.isArray(p.track_ids)
+            ? p.track_ids
+            : JSON.parse(p.track_ids || '[]');
+          return {
+            id: p.playlist_id || p.id,
+            title: p.title,
+            description: p.description || '',
+            curator: p.curator || 'You',
+            cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+            color: p.color || '#1e3264',
+            trackIds: Array.isArray(trackIds) ? trackIds : []
+          };
+        } catch (error) {
+          return {
+            id: p.playlist_id || p.id,
+            title: p.title,
+            description: p.description || '',
+            curator: p.curator || 'You',
+            cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+            color: p.color || '#1e3264',
+            trackIds: []
+          };
+        }
+      });
+
+      const nextPlaylists = syncedPlaylists.length ? syncedPlaylists : (fallbackPlaylists.length ? fallbackPlaylists : INITIAL_PLAYLISTS);
+      const nextLiked = (likedData || []).map(item => item.track_id).length ? (likedData || []).map(item => item.track_id) : (fallbackLiked.length ? fallbackLiked : ["track-1", "track-2", "track-5"]);
+
+      this.userPlaylists = nextPlaylists;
+      this.userLikedTrackIds = nextLiked;
+
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
       this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
     } catch (error) {
-      console.warn('User playlist sync from Supabase unavailable; using local storage.', error);
+      console.warn('User playlist sync from Supabase unavailable; keeping local fallback data.', error);
+      this.userPlaylists = fallbackPlaylists.length ? fallbackPlaylists : INITIAL_PLAYLISTS;
+      this.userLikedTrackIds = fallbackLiked.length ? fallbackLiked : ["track-1", "track-2", "track-5"];
+      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
+      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
     }
   }
 
@@ -181,7 +213,10 @@ class StorageManager {
   // --- Liked Tracks ---
   getLikedTrackIds() {
     if (this.currentUserId) {
-      const liked = this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), []);
+      if (!this.userLikedTrackIds.length) {
+        this.syncUserDataFromSupabase();
+      }
+      const liked = this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), ["track-1", "track-2", "track-5"]);
       this.userLikedTrackIds = liked;
       return liked;
     }
@@ -257,6 +292,9 @@ class StorageManager {
   // --- Playlists ---
   getPlaylists() {
     if (this.currentUserId) {
+      if (!this.userPlaylists.length) {
+        this.syncUserDataFromSupabase();
+      }
       const userPlaylists = this.userPlaylists.length ? this.userPlaylists : this.readJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), INITIAL_PLAYLISTS);
       this.userPlaylists = userPlaylists.length ? userPlaylists : INITIAL_PLAYLISTS;
       return this.userPlaylists;
