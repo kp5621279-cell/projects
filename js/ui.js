@@ -148,9 +148,11 @@ class UIManager {
         break;
       case 'search':
       case 'charts':
-      case 'artists':
       case 'radio':
         this.renderSearch(this.searchQuery);
+        break;
+      case 'artists':
+        this.renderArtists();
         break;
       case 'playlists':
         this.renderPlaylists();
@@ -696,6 +698,37 @@ class UIManager {
             </table>
           </div>
         </section>
+      </div>
+    `;
+  }
+
+  // 6. ARTISTS DIRECTORY VIEW
+  renderArtists() {
+    const artists = storage.getArtists();
+    this.setDynamicHeaderColor('#333333');
+
+    this.mainContent.innerHTML = `
+      <div class="view-container artists-directory fade-in">
+        <div class="playlist-directory-header">
+          <div>
+            <p class="playlist-badge">Browse</p>
+            <h1 class="playlist-directory-title">Artists</h1>
+          </div>
+        </div>
+        <div class="artist-grid">
+          ${artists.map(a => `
+            <div class="artist-card shelf-card" data-action="open-artist" data-id="${a.id}">
+              <div class="shelf-card-thumb-wrap">
+                <img src="${a.avatar}" class="shelf-card-thumb rounded-full" alt="${a.name}" />
+                <button class="shelf-play-btn" data-action="play-artist-all" data-id="${a.name}" title="Play ${a.name}">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+              </div>
+              <h4 class="shelf-card-title truncate">${a.name}</h4>
+              <p class="shelf-card-subtitle">${a.monthlyListeners} listeners</p>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
