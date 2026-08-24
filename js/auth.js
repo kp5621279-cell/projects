@@ -164,6 +164,7 @@ export function setupAuth(ui) {
           <label>Email<input id="reset-email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
           <button class="auth-submit" id="reset-submit" type="submit">Send Reset Link</button>
         </form>
+        <p class="auth-note" style="font-size:11px;color:#999;text-align:center;margin:12px 0 0;line-height:1.5;"> Didn't receive the email? Check your <strong>Spam/Junk</strong> folder. </p>
         <p class="auth-switch"><button id="reset-back-btn" type="button">← Back to Sign In</button></p>
       </div>
     </div>
@@ -270,7 +271,7 @@ export function setupAuth(ui) {
       await sendPasswordResetEmail(auth, email);
       resetModal.classList.add('hidden');
       resetForm.reset();
-      ui.showToast('Reset link sent! Check your email inbox & spam folder.', 5000, 'success');
+      ui.showToast('Reset link sent! Check your Inbox — if not there, check Spam/Junk folder.', 6000, 'success');
     } catch (error) {
       let msg = 'Could not send reset link.';
       const code = error.code || '';
