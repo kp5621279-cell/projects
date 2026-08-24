@@ -318,7 +318,12 @@ class ZRApp {
         const debugActions = ['filter-category', 'open-artist', 'play-artist-all', 'open-playlist', 'play-playlist', 'play-track', 'play-liked'];
         if (debugActions.includes(action) && ui && typeof ui.showToast === 'function') {
           const title = actionEl.getAttribute('data-title') || '';
-          ui.showToast(`${action}${title ? ': ' + title : id ? ': ' + id : ''}`, 1200, 'info');
+          let idLabel = '';
+          if (id) {
+            // Hide technical prefixes like 'itunes-' from user-facing debug messages
+            idLabel = id.replace(/^itunes-/, '');
+          }
+          ui.showToast(`${action}${title ? ': ' + title : idLabel ? ': ' + idLabel : ''}`, 1200, 'info');
         }
       } catch (e) {
         console.warn('[app] debug toast failed', e);
