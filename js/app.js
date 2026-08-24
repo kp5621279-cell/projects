@@ -69,8 +69,6 @@ class ZRApp {
 
       const latestVersion = (await response.text()).trim();
       if (!latestVersion) return;
-      // Ignore non-version responses (e.g. 'unavailable', error pages, HTML)
-      if (!/^[0-9]/.test(latestVersion)) return;
 
       const savedVersion = localStorage.getItem(storageKey) || this.appVersion;
       const isMismatch = latestVersion !== this.appVersion;
