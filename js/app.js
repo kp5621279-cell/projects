@@ -312,6 +312,7 @@ class ZRApp {
 
       const action = actionEl.getAttribute('data-action');
       const id = actionEl.getAttribute('data-id');
+      console.debug('[app] click action:', action, 'id:', id, 'el:', actionEl);
 
       switch (action) {
         case 'open-playlist':
@@ -325,6 +326,7 @@ class ZRApp {
           break;
         case 'filter-category': {
           const title = actionEl.getAttribute('data-title');
+          console.debug('[app] filter-category clicked, title=', title);
           ui.navigateTo('search', title);
           break;
         }
