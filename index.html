@@ -135,8 +135,15 @@
           <div class="user-avatar-btn" title="ZR User">
             <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80" class="user-avatar-img" alt="Avatar" />
           </div>
-           <div id="device-indicator-account" class="device-indicator" title="Device" style="margin-right:8px;display:inline-flex;align-items:center;justify-content:center;">
-             <!-- filled by JS -->
+           <div style="position:relative; margin-right:8px;">
+            <button id="device-indicator-account" class="device-indicator" title="Device" aria-haspopup="true" aria-expanded="false">
+              <!-- filled by JS -->
+            </button>
+            <div id="device-dropdown" class="device-dropdown hidden" role="menu" aria-hidden="true">
+              <button class="device-option" data-mode="auto">Auto Detect</button>
+              <button class="device-option" data-mode="desktop">Desktop</button>
+              <button class="device-option" data-mode="mobile">Mobile</button>
+            </div>
            </div>
         </div>
       </header>

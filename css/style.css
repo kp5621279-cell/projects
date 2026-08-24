@@ -1206,6 +1206,48 @@ html.mobile .compact-track-row .btn-like-icon {
 .device-indicator { color: var(--ZR-text-subdued); margin-left: 8px; }
 .device-indicator svg { opacity: 0.9; }
 
+/* Circular highlighted device indicator */
+.device-indicator {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
+}
+.device-indicator:hover { background: rgba(255,255,255,0.06); }
+
+/* Dropdown */
+.device-dropdown {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  background: var(--ZR-elevated-base);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 6px;
+  border-radius: 8px;
+  min-width: 140px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 9999;
+}
+.device-dropdown.hidden { display: none; }
+.device-dropdown .device-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--ZR-text-base);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+.device-dropdown .device-option:hover { background: rgba(255,255,255,0.03); }
+
 /* --- Artist View --- */
 .artist-banner {
   height: 180px; /* reduced for better layout */

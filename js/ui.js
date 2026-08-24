@@ -28,6 +28,7 @@ class UIManager {
     this.navigateTo('home');
     if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
     this.detectAndApplyDevice();
+    this.setupDeviceDropdown();
     this.setupVisualizerLoop();
   }
 
@@ -67,6 +68,7 @@ class UIManager {
     this.btnDiscoverBack = document.getElementById('btn-discover-back');
     this.deviceIndicatorSearch = document.getElementById('device-indicator-search');
     this.deviceIndicatorAccount = document.getElementById('device-indicator-account');
+    this.deviceDropdown = document.getElementById('device-dropdown');
   }
 
   setupPlayerListeners() {
@@ -209,12 +211,55 @@ class UIManager {
       const iconPhone = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
       const iconPc = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8v2H8z"/></svg>';
 
-      if (this.deviceIndicatorSearch) this.deviceIndicatorSearch.innerHTML = isMobile ? iconPhone : iconPc;
+      // Show indicator only in account area to avoid duplicate indicators
+      if (this.deviceIndicatorSearch) this.deviceIndicatorSearch.style.display = 'none';
       if (this.deviceIndicatorAccount) this.deviceIndicatorAccount.innerHTML = isMobile ? iconPhone : iconPc;
 
       if (isMobile) document.documentElement.classList.add('mobile-layout'); else document.documentElement.classList.remove('mobile-layout');
     } catch (err) {
       console.warn('Device detect failed', err);
+    }
+  }
+
+  setupDeviceDropdown() {
+    if (!this.deviceIndicatorAccount) return;
+    this.deviceIndicatorAccount.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !(this.deviceDropdown && this.deviceDropdown.classList.contains('hidden'));
+      if (this.deviceDropdown) {
+        this.deviceDropdown.classList.toggle('hidden', open);
+        this.deviceIndicatorAccount.setAttribute('aria-expanded', String(!open));
+      }
+    });
+
+    document.addEventListener('click', () => {
+      if (this.deviceDropdown && !this.deviceDropdown.classList.contains('hidden')) {
+        this.deviceDropdown.classList.add('hidden');
+        this.deviceIndicatorAccount.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    if (this.deviceDropdown) {
+      this.deviceDropdown.querySelectorAll('.device-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const mode = btn.getAttribute('data-mode');
+          if (mode === 'mobile') {
+            document.documentElement.classList.add('mobile-layout');
+            this.deviceIndicatorAccount.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
+          } else if (mode === 'desktop') {
+            document.documentElement.classList.remove('mobile-layout');
+            this.deviceIndicatorAccount.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8v2H8z"/></svg>';
+          } else {
+            // auto
+            this.detectAndApplyDevice();
+          }
+          // hide dropdown
+          if (this.deviceDropdown) {
+            this.deviceDropdown.classList.add('hidden');
+            this.deviceIndicatorAccount.setAttribute('aria-expanded', 'false');
+          }
+        });
+      });
     }
   }
 
