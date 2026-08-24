@@ -1202,6 +1202,47 @@ html.mobile .compact-track-row .btn-like-icon {
   display: inline-flex !important;
 }
 
+/* Stronger mobile layout: convert to single-column app shell and enable scrolling */
+html.mobile .ZR-desktop-app {
+  grid-template-columns: 1fr !important;
+  grid-template-areas:
+    "main"
+    "player";
+  padding: 0 !important;
+  height: 100vh;
+}
+html.mobile .left-sidebar,
+html.mobile .right-sidebar {
+  display: none !important;
+}
+html.mobile .main-view-wrapper {
+  height: calc(100vh - var(--player-height)) !important;
+  padding: 0 12px 88px 12px !important;
+}
+html.mobile body {
+  overflow: auto !important;
+  height: auto !important;
+}
+
+/* Make the topbar search input responsive on narrow screens */
+html.mobile .topbar-search-input {
+  width: calc(100% - 120px) !important;
+  min-width: 0 !important;
+  padding: 8px 36px 8px 40px !important;
+}
+
+/* Make player bar full-width on mobile */
+html.mobile .bottom-player-bar {
+  grid-template-columns: 1fr !important;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+/* Reduce oversized elements for small screens */
+html.mobile .player-thumb-wrap { width: 44px; height: 44px; }
+html.mobile .player-track-title { font-size: 13px; }
+html.mobile .player-track-artist { font-size: 11px; }
+
 /* Device indicator styles */
 .device-indicator { color: var(--ZR-text-subdued); margin-left: 8px; }
 .device-indicator svg { opacity: 0.9; }
