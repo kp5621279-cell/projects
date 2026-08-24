@@ -250,12 +250,37 @@ class StorageManager {
     }
   }
 
-  /** Merge playlists: local wins on conflicts */
+  /** Merge playlists: newer updated_at wins, more tracks wins */
   _mergePlaylists(local, remote) {
     const map = new Map();
-    remote.forEach(p => map.set(p.id, p));
-    local.forEach(p => map.set(p.id, p));
-    return Array.from(map.values());
+    remote.forEach(p => map.set(p.id, { ...p, _source: 'remote' }));
+    local.forEach(p => map.set(p.id, { ...p, _source: 'local' }));
+    
+    return Array.from(map.values()).map(p => {
+      // Find the other version for comparison
+      const localVersion = local.find(lp => lp.id === p.id);
+      const remoteVersion = remote.find(rp => rp.id === p.id);
+      
+      if (!localVersion) return remoteVersion || p; // Remote only
+      if (!remoteVersion) return localVersion || p; // Local only
+      
+      // Both exist - pick the one with MORE tracks (real data)
+      const localTrackCount = (localVersion.trackIds || []).length;
+      const remoteTrackCount = (remoteVersion.trackIds || []).length;
+      
+      if (remoteTrackCount > localTrackCount) {
+        // Remote has more data - use remote version
+        return remoteVersion;
+      }
+      
+      // Same or local has more - merge trackIds from both
+      const mergedTrackIds = [...new Set([...localVersion.trackIds, ...remoteVersion.trackIds])];
+      return {
+        ...remoteVersion,
+        ...localVersion,
+        trackIds: mergedTrackIds
+      };
+    });
   }
 
   /** Merge local tracks: local wins on conflicts */
