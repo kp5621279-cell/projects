@@ -1338,6 +1338,22 @@ html.mobile .topbar { position: sticky; top: 0; left: 0; right: 0; z-index: 1200
 
 /* Ensure main content doesn't get hidden behind sticky topbar */
 html.mobile .main-view-wrapper { padding-top: 64px !important; }
+
+/* Hide duplicate search icons when search is open */
+.topbar-search-box.search-open .search-icon-inside { display: none !important; }
+.topbar-search-box.search-open .mobile-search-btn { display: none !important; }
+
+/* Bottom player tweaks to avoid overlap and keep it framed on mobile */
+html.mobile .bottom-player-bar {
+  left: 8px;
+  right: 8px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  border-radius: 12px;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.6);
+  padding: 8px 12px !important;
+}
+html.mobile .main-content { padding-bottom: 150px !important; }
 .topbar-search-box.search-open .topbar-search-input { display: block !important; }
 @media (max-width: 1024px) {
   .topbar-search-box .topbar-search-input { display: none; }
