@@ -28,6 +28,7 @@ class UIManager {
     this.navigateTo('home');
     if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
     this.detectAndApplyDevice();
+    this.setupDeviceAutoRefresh();
     this.setupDeviceDropdown();
     this.setupMobileSearchToggle();
     this.setupVisualizerLoop();
@@ -209,7 +210,10 @@ class UIManager {
       const ua = navigator.userAgent || '';
       // check saved preference
       const saved = (typeof localStorage !== 'undefined') ? localStorage.getItem('ZR_device_mode') : null;
-      let isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile);
+      // additional heuristics: viewport width, pointer coarse
+      const widthMobile = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+      const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      let isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile) || widthMobile || coarsePointer;
       if (saved === 'mobile') isMobile = true;
       if (saved === 'desktop') isMobile = false;
       document.documentElement.classList.toggle('mobile', !!isMobile);
@@ -220,12 +224,23 @@ class UIManager {
 
       // Show indicator only in account area to avoid duplicate indicators
       if (this.deviceIndicatorSearch) this.deviceIndicatorSearch.style.display = 'none';
-      if (this.deviceIndicatorAccount) this.deviceIndicatorAccount.innerHTML = isMobile ? iconPhone : iconPc;
+      if (this.deviceIndicatorAccount) {
+        this.deviceIndicatorAccount.innerHTML = isMobile ? iconPhone : iconPc;
+        this.deviceIndicatorAccount.setAttribute('title', isMobile ? 'Device: Mobile' : 'Device: Desktop');
+        this.deviceIndicatorAccount.dataset.mode = isMobile ? 'mobile' : 'desktop';
+      }
 
       if (isMobile) document.documentElement.classList.add('mobile-layout'); else document.documentElement.classList.remove('mobile-layout');
     } catch (err) {
       console.warn('Device detect failed', err);
     }
+  }
+
+  setupDeviceAutoRefresh() {
+    const deb = (fn, t=250) => { let to=null; return () => { clearTimeout(to); to = setTimeout(fn, t); }; };
+    const refresh = deb(() => { try { this.detectAndApplyDevice(); } catch(e){} }, 200);
+    window.addEventListener('resize', refresh);
+    window.addEventListener('orientationchange', refresh);
   }
 
   setupDeviceDropdown() {
