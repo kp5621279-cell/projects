@@ -27,6 +27,7 @@ class UIManager {
     this.renderSidebarPlaylists();
     this.navigateTo('home');
     if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
+    this.detectAndApplyDevice();
     this.setupVisualizerLoop();
   }
 
@@ -64,6 +65,8 @@ class UIManager {
     this.contextMenu = document.getElementById('context-menu');
     this.toastContainer = document.getElementById('toast-container');
     this.btnDiscoverBack = document.getElementById('btn-discover-back');
+    this.deviceIndicatorSearch = document.getElementById('device-indicator-search');
+    this.deviceIndicatorAccount = document.getElementById('device-indicator-account');
   }
 
   setupPlayerListeners() {
@@ -193,6 +196,25 @@ class UIManager {
       this.historyIndex++;
       const [view, param] = this.viewHistory[this.historyIndex].split(':');
       this.navigateTo(view, param === 'null' ? null : param);
+    }
+  }
+
+  detectAndApplyDevice() {
+    try {
+      const ua = navigator.userAgent || '';
+      const isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile);
+      document.documentElement.classList.toggle('mobile', !!isMobile);
+      document.documentElement.classList.toggle('desktop', !isMobile);
+
+      const iconPhone = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
+      const iconPc = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8v2H8z"/></svg>';
+
+      if (this.deviceIndicatorSearch) this.deviceIndicatorSearch.innerHTML = isMobile ? iconPhone : iconPc;
+      if (this.deviceIndicatorAccount) this.deviceIndicatorAccount.innerHTML = isMobile ? iconPhone : iconPc;
+
+      if (isMobile) document.documentElement.classList.add('mobile-layout'); else document.documentElement.classList.remove('mobile-layout');
+    } catch (err) {
+      console.warn('Device detect failed', err);
     }
   }
 
