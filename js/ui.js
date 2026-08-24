@@ -666,7 +666,7 @@ class UIManager {
     this.mainContent.innerHTML = `
       <div class="view-container artist-view fade-in">
         <!-- Artist Banner Header -->
-        <div class="artist-banner" style="background-image: url('${artist.banner}')">
+        <div class="artist-banner" style="height:180px;padding:20px;background-size:cover;background-position:center;background-image: url('${artist.banner}')">
           <div class="artist-banner-overlay">
             ${artist.verified ? `
               <div class="verified-badge-pill">
