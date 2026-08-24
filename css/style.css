@@ -1379,11 +1379,7 @@ input, textarea {
   gap: 20px;
 }
 
-.lottie-play-btn {
-  width: 48px;
-  height: 48px;
-  display: inline-block;
-}
+/* Removed Lottie button styles (reverted to SVG play/pause) */
 .btn-control-icon {
   color: var(--ZR-text-subdued);
   position: relative;
