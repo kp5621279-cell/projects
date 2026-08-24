@@ -359,6 +359,7 @@ class UIManager {
 
   // 2. SEARCH & BROWSE VIEW (Instant Local + Global Search)
   renderSearch(query = '') {
+    console.debug('[ui] renderSearch called with query=', query);
     this.setDynamicHeaderColor('#242424');
     const tracks = storage.getAllTracks();
     const artists = storage.getArtists();
@@ -391,6 +392,7 @@ class UIManager {
       t.album.toLowerCase().includes(q) ||
       t.genre.toLowerCase().includes(q)
     );
+    console.debug('[ui] local matchingTracks count=', matchingTracks.length);
 
     const matchingArtists = artists.filter(a => a.name.toLowerCase().includes(q));
     const matchingPlaylists = playlists.filter(p => p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
@@ -401,6 +403,7 @@ class UIManager {
     // 2. Concurrently Trigger Live Global Online Search (iTunes / Apple Music Free API)
     if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
     this.searchDebounceTimer = setTimeout(() => {
+      console.debug('[ui] scheduling fetchOnlineMusicSearch for', q);
       this.fetchOnlineMusicSearch(q);
     }, 300);
   }

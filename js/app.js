@@ -156,9 +156,15 @@ class ZRApp {
         if (e.key !== 'Enter') return;
         const val = searchInput.value.trim();
         if (!val) return;
-        storage.addRecentSearch(val);
-        ui.renderSearchHistoryDropdown(val);
-        ui.navigateTo('search', val);
+        console.debug('[app] Search Enter pressed, value=', val);
+        try { storage.addRecentSearch(val); } catch (err) { console.warn('[app] addRecentSearch error', err); }
+        try { ui.renderSearchHistoryDropdown(val); } catch (err) { console.warn('[app] renderSearchHistoryDropdown error', err); }
+        try {
+          ui.navigateTo('search', val);
+          console.debug('[app] navigateTo called for search with', val);
+        } catch (err) {
+          console.error('[app] navigateTo error', err);
+        }
       });
 
       searchInput.addEventListener('focus', () => {
