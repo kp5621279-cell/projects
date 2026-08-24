@@ -812,6 +812,12 @@ class ZRApp {
           setTimeout(() => {
             hideAuthDetailsLoader();
             ui.showToast(success ? 'Added to playlist!' : 'Track already in this playlist', 3000, success ? 'success' : 'warning');
+            // If the user is currently viewing this playlist, refresh it so changes appear immediately
+            try {
+              if (ui.currentView === 'playlist' && ui.currentParam === plId) {
+                ui.renderPlaylist(plId);
+              }
+            } catch (e) { console.debug('re-render playlist failed', e); }
           }, 1200);
         } else if (action === 'context-remove-from-playlist') {
           const plId = item.getAttribute('data-playlist-id');

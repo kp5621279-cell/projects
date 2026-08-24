@@ -692,33 +692,46 @@ class StorageManager {
   }
 
   addTrackToPlaylist(playlistId, trackId) {
-    const playlists = this.getPlaylists();
-    const pl = playlists.find(p => p.id === playlistId);
-    if (pl) {
+    // Operate on the authoritative stored playlists to avoid overwrites
+    try {
+      const stored = this.readJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, []);
+      const idx = stored.findIndex(p => p.id === playlistId);
+      if (idx === -1) return false;
+      const pl = stored[idx];
+      pl.trackIds = Array.isArray(pl.trackIds) ? pl.trackIds : [];
       if (!pl.trackIds.includes(trackId)) {
         pl.trackIds.push(trackId);
-        this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
+        // ensure unique
+        pl.trackIds = [...new Set(pl.trackIds)];
+        // write back full list
+        this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, stored);
         if (this.currentUserId) {
-          this.userPlaylists = playlists;
+          this.userPlaylists = stored;
           this._persistPlaylist(pl);
         }
         return true;
       }
+    } catch (e) {
+      console.warn('addTrackToPlaylist failed', e);
     }
     return false;
   }
 
   removeTrackFromPlaylist(playlistId, trackId) {
-    const playlists = this.getPlaylists();
-    const pl = playlists.find(p => p.id === playlistId);
-    if (pl) {
-      pl.trackIds = pl.trackIds.filter(id => id !== trackId);
-      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
+    try {
+      const stored = this.readJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, []);
+      const idx = stored.findIndex(p => p.id === playlistId);
+      if (idx === -1) return false;
+      const pl = stored[idx];
+      pl.trackIds = (pl.trackIds || []).filter(id => id !== trackId);
+      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, stored);
       if (this.currentUserId) {
-        this.userPlaylists = playlists;
+        this.userPlaylists = stored;
         this._persistPlaylist(pl);
       }
       return true;
+    } catch (e) {
+      console.warn('removeTrackFromPlaylist failed', e);
     }
     return false;
   }
