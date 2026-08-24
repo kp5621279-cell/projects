@@ -452,6 +452,11 @@ input, textarea {
   background: rgba(255,255,255,0.04);
 }
 
+/* Force show back button immediately for testing (overrides inline/JS hide) */
+.btn-discover-back {
+  display: inline-flex !important;
+}
+
 /* Top Search Bar */
 .topbar-search-box {
   position: relative;
