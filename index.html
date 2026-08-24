@@ -354,6 +354,27 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
+  <!-- Device Selection Modal (shown after splash to let user choose Auto/Desktop/Mobile) -->
+  <div class="modal-overlay hidden" id="device-select-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Choose Device Layout</h3>
+        <button class="btn-icon-round" data-action="close-modal" data-modal="device-select-modal">✕</button>
+      </div>
+      <div class="modal-form-group">
+        <p class="modal-text" style="margin:0 0 8px 0; color: #f5e7e9;">We detected your device, but you can choose which layout to use. Your choice will be remembered.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn-modal-save" id="device-select-auto" style="background:#666;">Auto Detect</button>
+          <button class="btn-modal-save" id="device-select-desktop">Desktop</button>
+          <button class="btn-modal-save" id="device-select-mobile" style="background:#cc4411;">Mobile</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="device-select-dismiss">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay hidden" id="app-update-modal">
     <div class="modal-dialog">
       <div class="modal-header">

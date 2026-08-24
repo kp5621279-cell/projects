@@ -58,6 +58,14 @@ class ZRApp {
           const label = window.ui.deviceLabel || (document.documentElement.classList.contains('mobile') ? 'Mobile' : 'Desktop');
           window.ui.showToast(`Device detected: ${label} — Logged in as ${label}`, 4200, 'info');
         }
+        try {
+          const savedMode = (typeof localStorage !== 'undefined') ? localStorage.getItem('ZR_device_mode') : null;
+          const forceShow = /([?&])selectDevice=1(\b|$)/.test(location.search || '');
+          if (window.ui && typeof window.ui.showDeviceSelectModal === 'function' && (!savedMode || forceShow)) {
+            // small delay so UI is ready
+            setTimeout(() => { try { window.ui.showDeviceSelectModal(); } catch(e){} }, 450);
+          }
+        } catch (e) { console.debug('device select modal failed', e); }
       } catch (e) { console.debug('post-splash toast failed', e); }
     }, 700);
   }

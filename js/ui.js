@@ -629,6 +629,50 @@ class UIManager {
     } catch (err) { console.warn('dev helper init failed', err); }
   }
 
+  showDeviceSelectModal() {
+    try {
+      const modal = document.getElementById('device-select-modal');
+      if (!modal) return;
+
+      // If user already has a saved preference, don't show
+      const saved = (typeof localStorage !== 'undefined') ? localStorage.getItem('ZR_device_mode') : null;
+      if (saved) return;
+
+      // Show modal
+      modal.classList.remove('hidden');
+
+      const closeModal = () => { modal.classList.add('hidden'); };
+
+      const applyMode = (mode) => {
+        try {
+          if (mode === 'auto') {
+            try { localStorage.removeItem('ZR_device_mode'); } catch(e){}
+          } else {
+            try { localStorage.setItem('ZR_device_mode', mode); } catch(e){}
+          }
+        } catch (e) {}
+        try { this.detectAndApplyDevice(); } catch (e) {}
+        try { this.showToast(`Layout set to ${mode === 'auto' ? 'Auto' : (mode === 'mobile' ? 'Mobile' : 'Desktop')}`, 2200, 'info'); } catch(e){}
+        closeModal();
+      };
+
+      const btnAuto = document.getElementById('device-select-auto');
+      const btnDesktop = document.getElementById('device-select-desktop');
+      const btnMobile = document.getElementById('device-select-mobile');
+      const btnDismiss = document.getElementById('device-select-dismiss');
+
+      if (btnAuto) { btnAuto.onclick = () => applyMode('auto'); }
+      if (btnDesktop) { btnDesktop.onclick = () => applyMode('desktop'); }
+      if (btnMobile) { btnMobile.onclick = () => applyMode('mobile'); }
+      if (btnDismiss) { btnDismiss.onclick = closeModal; }
+
+      // allow clicking outside to close
+      modal.addEventListener('click', (ev) => {
+        if (ev.target === modal) closeModal();
+      });
+    } catch (err) { console.warn('showDeviceSelectModal failed', err); }
+  }
+
   updateNavButtons() {
     const btnBack = document.getElementById('btn-history-back');
     const btnForward = document.getElementById('btn-history-forward');
