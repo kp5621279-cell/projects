@@ -2152,6 +2152,8 @@ body {
 }
 #auth-form input:focus, #otp-form input:focus { border-color: #ff4b58; box-shadow: 0 0 0 3px rgba(255, 61, 75, .12); }
 .auth-submit { margin-top: 5px; background: linear-gradient(135deg, #f64754, #95151f); color: #fff9f1; box-shadow: 0 8px 22px rgba(226, 29, 45, .27); }
+.auth-forgot-link { background: none; border: none; color: #ff737c; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 0; margin: -4px 0 12px; display: block; text-align: left; }
+.auth-forgot-link:hover { color: #ffa0a6; }
 .auth-otp-link, .auth-switch button { color: #ff737c; font-size: 12px; text-decoration: underline; }
 .auth-otp-link { display: block; margin: 15px auto 0; }
 .auth-switch { margin: 19px 0 0; color: #cdbcb1; text-align: center; font-size: 12px; }

@@ -6,6 +6,7 @@
 import {
   signInWithPopup, GoogleAuthProvider,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 import { storage, auth } from './storage.js';
@@ -147,9 +148,23 @@ export function setupAuth(ui) {
         <form id="auth-form">
           <label>Email<input id="auth-email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
           <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters"></label>
+          <button type="button" class="auth-forgot-link" id="auth-forgot-btn">Forgot password?</button>
           <button class="auth-submit" id="auth-submit" type="submit">Sign In</button>
         </form>
         <p class="auth-switch"><span id="auth-switch-copy">New here?</span> <button id="auth-mode-toggle" type="button">Create an account</button></p>
+      </div>
+    </div>
+    <div class="auth-overlay hidden" id="reset-password-modal">
+      <div class="auth-card">
+        <button class="auth-close reset-close" type="button" aria-label="Close">×</button>
+        <p class="auth-eyebrow">ZR BEATS</p>
+        <h2>Reset Password</h2>
+        <p class="auth-copy">Enter your email and we'll send you a reset link.</p>
+        <form id="reset-password-form">
+          <label>Email<input id="reset-email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
+          <button class="auth-submit" id="reset-submit" type="submit">Send Reset Link</button>
+        </form>
+        <p class="auth-switch"><button id="reset-back-btn" type="button">← Back to Sign In</button></p>
       </div>
     </div>
   `);
@@ -206,6 +221,64 @@ export function setupAuth(ui) {
   });
 
   document.getElementById('auth-mode-toggle').addEventListener('click', () => show(mode === 'signup' ? 'signin' : 'signup'));
+
+  // --- Forgot Password ---
+  const resetModal = document.getElementById('reset-password-modal');
+  const resetForm = document.getElementById('reset-password-form');
+
+  document.getElementById('auth-forgot-btn')?.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    resetModal.classList.remove('hidden');
+    // Pre-fill email if already typed
+    const currentEmail = document.getElementById('auth-email')?.value?.trim();
+    if (currentEmail) document.getElementById('reset-email').value = currentEmail;
+  });
+
+  document.getElementById('reset-back-btn')?.addEventListener('click', () => {
+    resetModal.classList.add('hidden');
+    modal.classList.remove('hidden');
+  });
+
+  resetModal.querySelector('.reset-close')?.addEventListener('click', () => {
+    resetModal.classList.add('hidden');
+    resetForm.reset();
+  });
+
+  resetModal.addEventListener('click', (event) => {
+    if (event.target === resetModal) {
+      resetModal.classList.add('hidden');
+      resetForm.reset();
+    }
+  });
+
+  resetForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const emailInput = document.getElementById('reset-email');
+    const submitBtn = document.getElementById('reset-submit');
+    const email = emailInput.value.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      ui.showToast('Please enter a valid email address.', 3500, 'warning');
+      emailInput.focus();
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending...';
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      resetModal.classList.add('hidden');
+      resetForm.reset();
+      ui.showToast('Reset link sent! Check your email inbox.', 5000, 'success');
+    } catch (error) {
+      const err = getUserFacingAuthError(error.message, 'Could not send reset link.');
+      ui.showToast(err.msg, 4500, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send Reset Link';
+    }
+  });
 
   document.getElementById('logout-account-btn')?.addEventListener('click', async () => {
     try {
