@@ -387,13 +387,16 @@ class UIManager {
 
     const q = query.toLowerCase().trim();
 
-    // 1. Match local tracks
-    const matchingTracks = tracks.filter(t => 
-      t.title.toLowerCase().includes(q) || 
-      t.artist.toLowerCase().includes(q) || 
-      t.album.toLowerCase().includes(q) ||
-      t.genre.toLowerCase().includes(q)
-    );
+    // 1. Match local tracks (robust against missing fields)
+    const matchingTracks = tracks.filter(t => {
+      const title = (t.title || '').toLowerCase();
+      const artist = (t.artist || '').toLowerCase();
+      const album = (t.album || '').toLowerCase();
+      const genre = (t.genre || '').toLowerCase();
+      return title.includes(q) || artist.includes(q) || album.includes(q) || genre.includes(q);
+    });
+    // Show quick debug toast for local match counts
+    try { this.showToast(`Local:${tracks.length} matches:${matchingTracks.length}`, 2000, 'info'); } catch (e) { console.debug('toast failed', e); }
     console.debug('[ui] local matchingTracks count=', matchingTracks.length);
 
     const matchingArtists = artists.filter(a => a.name.toLowerCase().includes(q));
