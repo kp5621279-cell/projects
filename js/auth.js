@@ -267,16 +267,25 @@ export function setupAuth(ui) {
     submitBtn.textContent = 'Sending...';
 
     try {
-      console.log('[ZR] Sending password reset email to:', email);
       await sendPasswordResetEmail(auth, email);
-      console.log('[ZR] Password reset email sent successfully');
       resetModal.classList.add('hidden');
       resetForm.reset();
-      ui.showToast('Reset link sent! Check your email inbox (and spam folder).', 5000, 'success');
+      ui.showToast('Reset link sent! Check your email inbox & spam folder.', 5000, 'success');
     } catch (error) {
-      console.error('[ZR] Password reset error:', error.code, error.message);
-      const err = getUserFacingAuthError(error.message, 'Could not send reset link.');
-      ui.showToast(err.msg, 4500, 'error');
+      let msg = 'Could not send reset link.';
+      const code = error.code || '';
+      if (code.includes('user-not-found')) {
+        msg = 'No account found with this email. Please check your email address.';
+      } else if (code.includes('invalid-email')) {
+        msg = 'Invalid email address. Please enter a valid email.';
+      } else if (code.includes('too-many-requests')) {
+        msg = 'Too many attempts. Please wait a few minutes and try again.';
+      } else if (code.includes('network') || code.includes('fetch')) {
+        msg = 'Network error. Please check your internet connection.';
+      } else {
+        msg = 'Error: ' + (error.message || 'Could not send reset link.');
+      }
+      ui.showToast(msg, 5000, 'error');
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Send Reset Link';
