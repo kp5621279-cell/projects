@@ -234,6 +234,8 @@ class UIManager {
       } catch (e) {}
       document.documentElement.classList.toggle('mobile', !!isMobile);
       document.documentElement.classList.toggle('desktop', !isMobile);
+      // Explicit android class for UA-specific adjustments
+      document.documentElement.classList.toggle('android', /Android/i.test(ua));
 
       const iconPhone = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
       const iconPc = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8v2H8z"/></svg>';
@@ -409,7 +411,7 @@ class UIManager {
 
       // show button only in mobile mode
       const observer = new MutationObserver(() => {
-        const isMobile = document.documentElement.classList.contains('mobile');
+        const isMobile = document.documentElement.classList.contains('mobile') || document.documentElement.classList.contains('android');
         btn.classList.toggle('hidden', !isMobile);
       });
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
