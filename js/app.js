@@ -381,7 +381,7 @@ class ZRApp {
             break;
           }
           ui.showToast('Refreshing playlists...', 2500, 'info');
-          await storage.syncFromFirestore();
+          await storage.fullSync();
           ui.renderSidebarPlaylists();
           ui.navigateTo(ui.currentView || 'playlists', ui.currentParam || null);
           ui.showToast('Playlists synced successfully!', 3000, 'success');

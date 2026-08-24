@@ -1,13 +1,13 @@
 /**
  * ZR Web Desktop Clone - Storage Manager
  * Hybrid localStorage (primary) + Firebase Firestore (cross-device sync).
- * localStorage = instant reads, Firestore = cross-device sync.
+ * ALL user data is synced: playlists, liked tracks, search history, local tracks.
  */
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getFirestore, collection, doc, getDocs, setDoc, deleteDoc,
-  query, where, orderBy
+  query, orderBy
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import {
   getAuth, onAuthStateChanged
@@ -46,6 +46,7 @@ class StorageManager {
     this.userRecentSearches = [];
     this.userPlaylists = [];
     this.userLikedTrackIds = [];
+    this.userLocalTracks = [];
     this.init();
 
     // Listen to Firebase auth state changes
@@ -53,12 +54,13 @@ class StorageManager {
       try {
         this.setCurrentUser(user);
         if (user) {
-          await this.syncFromFirestore();
-          await this.fetchUserSearchHistory();
+          // Full sync: fetch FROM Firestore + push local data TO Firestore
+          await this.fullSync();
         } else {
           this.userPlaylists = [];
           this.userLikedTrackIds = [];
           this.userRecentSearches = [];
+          this.userLocalTracks = [];
         }
       } catch (err) {
         console.warn('Error in auth state handler for storage manager', err);
@@ -118,47 +120,57 @@ class StorageManager {
     if (!user) {
       this.userPlaylists = [];
       this.userLikedTrackIds = [];
+      this.userLocalTracks = [];
       return;
     }
 
-    // load from localStorage immediately so UI is never empty
+    // Load from localStorage immediately so UI is never empty
     this.userPlaylists = this.getLocalPlaylists();
     this.userLikedTrackIds = this.readJson(STORAGE_KEYS.LIKED_TRACKS, ["track-1", "track-2", "track-5"]);
+    this.userLocalTracks = this.readJson(STORAGE_KEYS.LOCAL_TRACKS, []);
   }
 
   // ============================
-  // FIRESTORE SYNC
+  // FIRESTORE COLLECTION REFS
   // ============================
 
-  /** Get user's playlists subcollection ref */
   _userPlaylistsRef() {
     return collection(db, 'users', this.currentUserId, 'playlists');
   }
 
-  /** Get user's likedTracks subcollection ref */
   _userLikedRef() {
     return collection(db, 'users', this.currentUserId, 'likedTracks');
   }
 
-  /** Get user's searchHistory subcollection ref */
   _userSearchRef() {
     return collection(db, 'users', this.currentUserId, 'searchHistory');
   }
 
+  _userLocalTracksRef() {
+    return collection(db, 'users', this.currentUserId, 'localTracks');
+  }
+
+  // ============================
+  // FULL SYNC: Fetch + Push
+  // ============================
+
   /**
-   * Fetch playlists from Firestore, merge with local, save to both.
+   * Full sync: fetch all data from Firestore, merge with local, then push back.
+   * This ensures cross-device sync works in both directions.
    */
-  async syncFromFirestore() {
+  async fullSync() {
     if (!this.currentUserId) return;
 
     try {
-      // Fetch playlists and liked tracks in parallel
-      const [playlistsSnap, likedSnap] = await Promise.all([
+      // 1. Fetch ALL data from Firestore in parallel
+      const [playlistsSnap, likedSnap, searchSnap, localTracksSnap] = await Promise.all([
         getDocs(query(this._userPlaylistsRef(), orderBy('updated_at', 'desc'))),
-        getDocs(this._userLikedRef())
+        getDocs(this._userLikedRef()),
+        getDocs(query(this._userSearchRef(), orderBy('created_at', 'desc'))),
+        getDocs(this._userLocalTracksRef())
       ]);
 
-      // Parse Firestore playlists
+      // 2. Parse remote playlists
       const remotePlaylists = playlistsSnap.docs.map(d => {
         const data = d.data();
         return {
@@ -173,26 +185,56 @@ class StorageManager {
         };
       });
 
-      // Parse liked tracks
+      // 3. Parse remote liked tracks
       const remoteLiked = likedSnap.docs.map(d => d.data().track_id).filter(Boolean);
 
-      // Merge: local + remote (local wins)
+      // 4. Parse remote search history
+      const remoteSearches = searchSnap.docs.map(d => d.data().query).filter(Boolean);
+
+      // 5. Parse remote local tracks
+      const remoteLocalTracks = localTracksSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: data.track_id || d.id,
+          title: data.title || '',
+          artist: data.artist || '',
+          album: data.album || '',
+          duration: data.duration || 0,
+          cover: data.cover || '',
+          audioSrc: data.audioSrc || '',
+          youtubeId: data.youtubeId || '',
+          color: data.color || '#1e3264'
+        };
+      });
+
+      // 6. MERGE: local + remote (local wins on conflicts)
       const localPlaylists = this.getLocalPlaylists();
-      const merged = this.mergePlaylists(localPlaylists, remotePlaylists);
+      const mergedPlaylists = this._mergePlaylists(localPlaylists, remotePlaylists);
 
-      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, merged);
-      this.userPlaylists = merged;
+      const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
+      const mergedLiked = [...new Set([...localLiked, ...remoteLiked])];
 
-      // Merge liked tracks
-      if (remoteLiked.length) {
-        const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
-        const mergedLiked = [...new Set([...localLiked, ...remoteLiked])];
-        this.writeJson(STORAGE_KEYS.LIKED_TRACKS, mergedLiked);
-        this.userLikedTrackIds = mergedLiked;
-      }
+      const localSearches = this.readJson(STORAGE_KEYS.RECENT_SEARCHES, []);
+      const mergedSearches = [...new Set([...remoteSearches, ...localSearches])].slice(0, 5);
 
-      // Push local-only playlists TO Firestore (background)
-      this._syncToFirestore(merged);
+      const localTracks = this.readJson(STORAGE_KEYS.LOCAL_TRACKS, []);
+      const mergedLocalTracks = this._mergeLocalTracks(localTracks, remoteLocalTracks);
+
+      // 7. Save merged data to localStorage
+      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, mergedPlaylists);
+      this.writeJson(STORAGE_KEYS.LIKED_TRACKS, mergedLiked);
+      this.writeJson(STORAGE_KEYS.RECENT_SEARCHES, mergedSearches);
+      this.writeJson(STORAGE_KEYS.LOCAL_TRACKS, mergedLocalTracks);
+
+      // 8. Update in-memory state
+      this.userPlaylists = mergedPlaylists;
+      this.userLikedTrackIds = mergedLiked;
+      this.userRecentSearches = mergedSearches;
+      this.userLocalTracks = mergedLocalTracks;
+
+      // 9. Push ALL local data TO Firestore (background)
+      this._pushAllToFirestore(mergedPlaylists, mergedLiked, mergedSearches, mergedLocalTracks);
+
     } catch (error) {
       console.warn('Firestore sync failed; using localStorage data.', error);
       if (!this.userPlaylists.length) {
@@ -201,25 +243,52 @@ class StorageManager {
     }
   }
 
-  /** Merge local and remote playlists. Local wins on conflicts. */
-  mergePlaylists(local, remote) {
+  /** Merge playlists: local wins on conflicts */
+  _mergePlaylists(local, remote) {
     const map = new Map();
     remote.forEach(p => map.set(p.id, p));
     local.forEach(p => map.set(p.id, p));
     return Array.from(map.values());
   }
 
-  /** Push all playlists to Firestore (background). */
-  async _syncToFirestore(playlists) {
-    if (!this.currentUserId || !playlists.length) return;
+  /** Merge local tracks: local wins on conflicts */
+  _mergeLocalTracks(local, remote) {
+    const map = new Map();
+    remote.forEach(t => map.set(t.id, t));
+    local.forEach(t => map.set(t.id, t));
+    return Array.from(map.values());
+  }
+
+  // ============================
+  // PUSH ALL DATA TO FIRESTORE
+  // ============================
+
+  async _pushAllToFirestore(playlists, liked, searches, localTracks) {
+    if (!this.currentUserId) return;
+
     try {
+      // Push playlists
       for (const pl of playlists) {
         await this._persistPlaylist(pl);
       }
+
+      // Push liked tracks
+      await this._persistLikedTracks(liked);
+
+      // Push search history
+      await this._persistSearchHistory(searches);
+
+      // Push local tracks
+      await this._persistLocalTracks(localTracks);
+
     } catch (error) {
-      console.warn('Background Firestore sync failed', error);
+      console.warn('Background Firestore push failed', error);
     }
   }
+
+  // ============================
+  // INDIVIDUAL PERSIST METHODS
+  // ============================
 
   /** Persist a single playlist to Firestore */
   async _persistPlaylist(playlist) {
@@ -242,7 +311,7 @@ class StorageManager {
   }
 
   /** Persist liked tracks to Firestore */
-  async _persistLikedTracks() {
+  async _persistLikedTracks(likedIds) {
     if (!this.currentUserId) return;
     try {
       // Delete existing
@@ -251,8 +320,8 @@ class StorageManager {
         await deleteDoc(d.ref);
       }
       // Insert current
-      const likedIds = this.getLikedTrackIds();
-      for (const trackId of likedIds) {
+      const ids = likedIds || this.getLikedTrackIds();
+      for (const trackId of ids) {
         await setDoc(doc(this._userLikedRef(), trackId), {
           track_id: trackId,
           user_id: this.currentUserId
@@ -260,6 +329,59 @@ class StorageManager {
       }
     } catch (error) {
       console.warn('Could not persist liked tracks to Firestore.', error);
+    }
+  }
+
+  /** Persist search history to Firestore */
+  async _persistSearchHistory(searches) {
+    if (!this.currentUserId) return;
+    try {
+      // Delete existing
+      const existing = await getDocs(this._userSearchRef());
+      for (const d of existing.docs) {
+        await deleteDoc(d.ref);
+      }
+      // Insert current (newest first)
+      const items = searches || this.userRecentSearches;
+      for (let i = items.length - 1; i >= 0; i--) {
+        await setDoc(doc(this._userSearchRef(), `search-${Date.now()}-${i}`), {
+          query: items[i],
+          user_id: this.currentUserId,
+          created_at: new Date(Date.now() - i * 1000).toISOString()
+        });
+      }
+    } catch (error) {
+      console.warn('Could not persist search history to Firestore.', error);
+    }
+  }
+
+  /** Persist local tracks to Firestore */
+  async _persistLocalTracks(tracks) {
+    if (!this.currentUserId) return;
+    try {
+      // Delete existing
+      const existing = await getDocs(this._userLocalTracksRef());
+      for (const d of existing.docs) {
+        await deleteDoc(d.ref);
+      }
+      // Insert current
+      const items = tracks || this.readJson(STORAGE_KEYS.LOCAL_TRACKS, []);
+      for (const track of items) {
+        await setDoc(doc(this._userLocalTracksRef(), track.id), {
+          track_id: track.id,
+          title: track.title || '',
+          artist: track.artist || '',
+          album: track.album || '',
+          duration: track.duration || 0,
+          cover: track.cover || '',
+          audioSrc: track.audioSrc || '',
+          youtubeId: track.youtubeId || '',
+          color: track.color || '#1e3264',
+          user_id: this.currentUserId
+        });
+      }
+    } catch (error) {
+      console.warn('Could not persist local tracks to Firestore.', error);
     }
   }
 
@@ -273,7 +395,10 @@ class StorageManager {
     }
   }
 
-  // --- Liked Tracks ---
+  // ============================
+  // LIKED TRACKS
+  // ============================
+
   getLikedTrackIds() {
     if (this.currentUserId) {
       return this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
@@ -305,12 +430,15 @@ class StorageManager {
     this.writeJson(STORAGE_KEYS.LIKED_TRACKS, liked);
     if (this.currentUserId) {
       this.userLikedTrackIds = liked;
-      this._persistLikedTracks();
+      this._persistLikedTracks(liked);
     }
     return isNowLiked;
   }
 
-  // --- All Tracks ---
+  // ============================
+  // ALL TRACKS
+  // ============================
+
   getAllTracks() {
     let localTracks = [];
     try {
@@ -338,11 +466,23 @@ class StorageManager {
     localTracks = localTracks.filter(t => t.id !== track.id);
     localTracks.unshift(track);
     if (localTracks.length > 100) localTracks = localTracks.slice(0, 100);
+
+    // Save to localStorage
     localStorage.setItem(STORAGE_KEYS.LOCAL_TRACKS, JSON.stringify(localTracks));
+
+    // Persist to Firestore
+    if (this.currentUserId) {
+      this.userLocalTracks = localTracks;
+      this._persistLocalTracks(localTracks);
+    }
+
     return track;
   }
 
-  // --- Playlists ---
+  // ============================
+  // PLAYLISTS
+  // ============================
+
   getLocalPlaylists() {
     try {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_PLAYLISTS));
@@ -459,7 +599,10 @@ class StorageManager {
     return false;
   }
 
-  // --- Search history (Firestore-backed for signed-in users) ---
+  // ============================
+  // SEARCH HISTORY
+  // ============================
+
   async fetchUserSearchHistory() {
     if (!this.currentUserId) return;
     try {
@@ -467,40 +610,11 @@ class StorageManager {
         query(this._userSearchRef(), orderBy('created_at', 'desc'))
       );
       this.userRecentSearches = snap.docs.slice(0, 5).map(d => d.data().query);
+      this.writeJson(STORAGE_KEYS.RECENT_SEARCHES, this.userRecentSearches);
     } catch (err) {
-      console.warn('Could not fetch user search history from Firestore', err);
+      console.warn('Could not fetch search history from Firestore', err);
       this.userRecentSearches = [];
     }
-  }
-
-  // --- Artists ---
-  getArtists() {
-    return INITIAL_ARTISTS;
-  }
-
-  getArtistById(id) {
-    return INITIAL_ARTISTS.find(a => a.id === id || a.name.toLowerCase() === id.toLowerCase()) || null;
-  }
-
-  getTracksByArtist(artistName) {
-    return this.getAllTracks().filter(t => t.artist.toLowerCase() === artistName.toLowerCase());
-  }
-
-  // --- Recent History ---
-  getRecentTrackIds() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.RECENT_TRACKS)) || [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  addRecentTrack(trackId) {
-    let recents = this.getRecentTrackIds();
-    recents = recents.filter(id => id !== trackId);
-    recents.unshift(trackId);
-    if (recents.length > 20) recents = recents.slice(0, 20);
-    localStorage.setItem(STORAGE_KEYS.RECENT_TRACKS, JSON.stringify(recents));
   }
 
   getRecentSearches() {
@@ -519,38 +633,61 @@ class StorageManager {
     const clean = String(query || '').trim();
     if (!clean) return;
 
+    // Update local
+    let searches = this.getRecentSearches();
+    const lower = clean.toLowerCase();
+    searches = searches.filter(item => item.toLowerCase() !== lower);
+    searches.unshift(clean);
+    searches = searches.slice(0, 5);
+    localStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(searches));
+
     if (this.currentUserId) {
-      (async () => {
-        try {
-          const searchId = `search-${Date.now()}`;
-          await setDoc(doc(this._userSearchRef(), searchId), {
-            query: clean,
-            user_id: this.currentUserId,
-            created_at: new Date().toISOString()
-          });
-          await this.fetchUserSearchHistory();
-          // Prune older than 5
-          const snap = await getDocs(query(this._userSearchRef(), orderBy('created_at', 'desc')));
-          if (snap.docs.length > 5) {
-            for (const d of snap.docs.slice(5)) {
-              await deleteDoc(d.ref);
-            }
-          }
-        } catch (err) {
-          console.warn('Could not add recent search to Firestore', err);
-        }
-      })();
-    } else {
-      let searches = this.getRecentSearches();
-      const lower = clean.toLowerCase();
-      searches = searches.filter(item => item.toLowerCase() !== lower);
-      searches.unshift(clean);
-      searches = searches.slice(0, 5);
-      localStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(searches));
+      this.userRecentSearches = searches;
+      // Persist to Firestore in background
+      this._persistSearchHistory(searches);
     }
   }
 
-  // --- Player Settings Persistence ---
+  // ============================
+  // ARTISTS
+  // ============================
+
+  getArtists() {
+    return INITIAL_ARTISTS;
+  }
+
+  getArtistById(id) {
+    return INITIAL_ARTISTS.find(a => a.id === id || a.name.toLowerCase() === id.toLowerCase()) || null;
+  }
+
+  getTracksByArtist(artistName) {
+    return this.getAllTracks().filter(t => t.artist.toLowerCase() === artistName.toLowerCase());
+  }
+
+  // ============================
+  // RECENT HISTORY
+  // ============================
+
+  getRecentTrackIds() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.RECENT_TRACKS)) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  addRecentTrack(trackId) {
+    let recents = this.getRecentTrackIds();
+    recents = recents.filter(id => id !== trackId);
+    recents.unshift(trackId);
+    if (recents.length > 20) recents = recents.slice(0, 20);
+    localStorage.setItem(STORAGE_KEYS.RECENT_TRACKS, JSON.stringify(recents));
+  }
+
+  // ============================
+  // PLAYER STATE
+  // ============================
+
   getPlayerState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYER_STATE));
