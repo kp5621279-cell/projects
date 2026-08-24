@@ -204,7 +204,11 @@ class UIManager {
   detectAndApplyDevice() {
     try {
       const ua = navigator.userAgent || '';
-      const isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile);
+      // check saved preference
+      const saved = (typeof localStorage !== 'undefined') ? localStorage.getItem('ZR_device_mode') : null;
+      let isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile);
+      if (saved === 'mobile') isMobile = true;
+      if (saved === 'desktop') isMobile = false;
       document.documentElement.classList.toggle('mobile', !!isMobile);
       document.documentElement.classList.toggle('desktop', !isMobile);
 
@@ -223,18 +227,49 @@ class UIManager {
 
   setupDeviceDropdown() {
     if (!this.deviceIndicatorAccount) return;
-    this.deviceIndicatorAccount.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = !(this.deviceDropdown && this.deviceDropdown.classList.contains('hidden'));
-      if (this.deviceDropdown) {
-        this.deviceDropdown.classList.toggle('hidden', open);
-        this.deviceIndicatorAccount.setAttribute('aria-expanded', String(!open));
+    const toggleDropdown = (e) => {
+      e && e.stopPropagation();
+      if (!this.deviceDropdown) return;
+      const isHidden = this.deviceDropdown.classList.contains('hidden');
+      if (isHidden) {
+        // open: ensure dropdown is attached to body and positioned
+        document.body.appendChild(this.deviceDropdown);
+        this.deviceDropdown.classList.remove('hidden');
+        this.deviceDropdown.setAttribute('aria-hidden', 'false');
+        this.deviceIndicatorAccount.setAttribute('aria-expanded', 'true');
+        // position
+        const rect = this.deviceIndicatorAccount.getBoundingClientRect();
+        // allow rendering to compute size
+        this.deviceDropdown.style.position = 'fixed';
+        this.deviceDropdown.style.left = '0px';
+        this.deviceDropdown.style.top = '-9999px';
+        // small delay to ensure offsetWidth/Height available
+        requestAnimationFrame(() => {
+          const ddw = this.deviceDropdown.offsetWidth || 160;
+          const ddh = this.deviceDropdown.offsetHeight || 120;
+          let left = rect.left + rect.width - ddw;
+          if (left < 8) left = 8;
+          if (left + ddw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - ddw - 8);
+          let top = rect.bottom + 8;
+          if (top + ddh > window.innerHeight - 8) top = Math.max(8, rect.top - ddh - 8);
+          this.deviceDropdown.style.left = `${left}px`;
+          this.deviceDropdown.style.top = `${top}px`;
+        });
+      } else {
+        // close
+        this.deviceDropdown.classList.add('hidden');
+        this.deviceDropdown.setAttribute('aria-hidden', 'true');
+        this.deviceIndicatorAccount.setAttribute('aria-expanded', 'false');
       }
-    });
+    };
+
+    this.deviceIndicatorAccount.addEventListener('click', toggleDropdown);
+    this.deviceIndicatorAccount.addEventListener('touchstart', (e) => { e.preventDefault(); toggleDropdown(e); });
 
     document.addEventListener('click', () => {
       if (this.deviceDropdown && !this.deviceDropdown.classList.contains('hidden')) {
         this.deviceDropdown.classList.add('hidden');
+        this.deviceDropdown.setAttribute('aria-hidden', 'true');
         this.deviceIndicatorAccount.setAttribute('aria-expanded', 'false');
       }
     });
@@ -243,6 +278,7 @@ class UIManager {
       this.deviceDropdown.querySelectorAll('.device-option').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const mode = btn.getAttribute('data-mode');
+          try { if (typeof localStorage !== 'undefined') localStorage.setItem('ZR_device_mode', mode); } catch (err) {}
           if (mode === 'mobile') {
             document.documentElement.classList.add('mobile-layout');
             this.deviceIndicatorAccount.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
@@ -251,11 +287,13 @@ class UIManager {
             this.deviceIndicatorAccount.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8v2H8z"/></svg>';
           } else {
             // auto
+            try { if (typeof localStorage !== 'undefined') localStorage.removeItem('ZR_device_mode'); } catch (err) {}
             this.detectAndApplyDevice();
           }
           // hide dropdown
           if (this.deviceDropdown) {
             this.deviceDropdown.classList.add('hidden');
+            this.deviceDropdown.setAttribute('aria-hidden', 'true');
             this.deviceIndicatorAccount.setAttribute('aria-expanded', 'false');
           }
         });
