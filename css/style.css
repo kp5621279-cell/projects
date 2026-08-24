@@ -1243,6 +1243,49 @@ html.mobile .player-thumb-wrap { width: 44px; height: 44px; }
 html.mobile .player-track-title { font-size: 13px; }
 html.mobile .player-track-artist { font-size: 11px; }
 
+/* Further mobile refinements to mimic native app feel */
+html.mobile .brand-name { display: none !important; }
+html.mobile .aesthetic-nav { display: none !important; }
+html.mobile .topbar { height: 52px; align-items: center; padding: 6px 10px; }
+html.mobile .topbar-left { gap: 8px; }
+html.mobile .brand-logo .zr-logo-svg { width: 32px; height: 32px; }
+
+/* Compact search: show only icon in header, expand on focus */
+html.mobile .topbar-search-box { max-width: none; flex: 1; margin-left: 6px; }
+html.mobile .topbar-search-input { width: 100% !important; padding: 8px 34px 8px 36px !important; border-radius: 28px; }
+
+/* Larger touch targets for track rows */
+.track-row, .compact-track-row {
+  padding: 12px 14px !important;
+  min-height: 64px !important;
+}
+.track-row .track-meta, .compact-track-row .compact-meta { display: flex; align-items: center; gap: 12px; }
+
+/* Make the player sticky and larger controls on mobile */
+html.mobile .bottom-player-bar {
+  position: fixed !important;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  grid-template-columns: 1fr !important;
+  height: 76px !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.6);
+}
+html.mobile .player-center { margin: 0; }
+.btn-main-play-pause { width: 52px; height: 52px; }
+.player-control-buttons svg { width: 22px; height: 22px; }
+
+/* Ensure main content has bottom padding so player doesn't cover it */
+html.mobile .main-content { padding-bottom: 120px !important; }
+
+/* Floating bottom nav mimic: show essential actions (Discover, Search, Library) if needed */
+.mobile-bottom-nav { display: none; }
+@media (max-width: 640px) {
+  .mobile-bottom-nav { display: flex; position: fixed; bottom: 76px; left: 12px; right: 12px; height: 56px; background: rgba(24,24,24,0.9); border-radius: 12px; align-items: center; justify-content: space-around; z-index: 9998; }
+  .mobile-bottom-nav .nav-item { color: var(--ZR-text-subdued); font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+}
+
 /* Device indicator styles */
 .device-indicator { color: var(--ZR-text-subdued); margin-left: 8px; }
 .device-indicator svg { opacity: 0.9; }
