@@ -31,6 +31,7 @@ class UIManager {
     this.setupDeviceAutoRefresh();
     this.setupDeviceDropdown();
     this.setupMobileSearchToggle();
+    this.setupDevHelper();
     this.setupVisualizerLoop();
   }
 
@@ -390,6 +391,123 @@ class UIManager {
         if (!container.contains(e.target)) container.classList.remove('search-open');
       });
     } catch (err) { console.warn('mobile search toggle failed', err); }
+  }
+
+  setupDevHelper() {
+    try {
+      // remove existing if any
+      const existing = document.getElementById('dev-device-helper');
+      if (existing) existing.remove();
+
+      const btn = document.createElement('button');
+      btn.id = 'dev-device-helper';
+      btn.title = 'Dev: Device helper (show detection + quick actions)';
+      btn.textContent = 'Dev:Device';
+      Object.assign(btn.style, {
+        position: 'fixed',
+        right: '12px',
+        bottom: '84px',
+        zIndex: 99999,
+        padding: '6px 10px',
+        fontSize: '12px',
+        background: '#222',
+        color: '#fff',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.4)'
+      });
+
+      const panel = document.createElement('div');
+      panel.id = 'dev-device-panel';
+      Object.assign(panel.style, {
+        position: 'fixed',
+        right: '12px',
+        bottom: '130px',
+        zIndex: 99999,
+        width: '320px',
+        maxWidth: 'calc(100% - 40px)',
+        background: '#0f0f10',
+        color: '#eee',
+        border: '1px solid rgba(255,255,255,0.06)',
+        padding: '10px',
+        borderRadius: '8px',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+        display: 'none',
+        fontSize: '13px'
+      });
+
+      const info = document.createElement('div');
+      info.id = 'dev-device-info';
+      info.style.marginBottom = '8px';
+
+      const makeBtn = (txt, color) => {
+        const b = document.createElement('button');
+        b.textContent = txt;
+        Object.assign(b.style, {
+          marginRight: '8px', padding: '6px 8px', fontSize: '12px', borderRadius: '6px', cursor: 'pointer', border: 'none'
+        });
+        if (color) b.style.background = color; else b.style.background = '#222';
+        b.style.color = '#fff';
+        return b;
+      };
+
+      const btnClear = makeBtn('Clear forced mode', '#3a3a3a');
+      const btnDesktop = makeBtn('Force Desktop', '#1166cc');
+      const btnMobile = makeBtn('Force Mobile', '#cc4411');
+      const btnClose = makeBtn('Close', '#666');
+
+      panel.appendChild(info);
+      const row = document.createElement('div');
+      row.appendChild(btnClear);
+      row.appendChild(btnDesktop);
+      row.appendChild(btnMobile);
+      row.appendChild(btnClose);
+      panel.appendChild(row);
+
+      document.body.appendChild(panel);
+      document.body.appendChild(btn);
+
+      const refreshInfo = () => {
+        const ua = navigator.userAgent || '';
+        const platform = navigator.platform || '';
+        const saved = (typeof localStorage !== 'undefined') ? localStorage.getItem('ZR_device_mode') : null;
+        const mobileClass = document.documentElement.classList.contains('mobile');
+        const mobileLayout = document.documentElement.classList.contains('mobile-layout');
+        info.innerHTML = `UA: ${ua.split(')')[0]})<br>Platform: ${platform}<br><strong>mobile class:</strong> ${mobileClass} &nbsp; <strong>mobile-layout:</strong> ${mobileLayout}<br><strong>ZR_device_mode:</strong> ${saved}`;
+      };
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        refreshInfo();
+      });
+
+      btnClear.addEventListener('click', () => {
+        try { localStorage.removeItem('ZR_device_mode'); } catch(e){}
+        refreshInfo();
+        window.ui && window.ui.detectAndApplyDevice();
+        window.ui && window.ui.showToast('Cleared forced device mode (auto)', 2500, 'info');
+      });
+      btnDesktop.addEventListener('click', () => {
+        try { localStorage.setItem('ZR_device_mode','desktop'); } catch(e){}
+        refreshInfo();
+        window.ui && window.ui.detectAndApplyDevice();
+        window.ui && window.ui.showToast('Forced Desktop mode', 2200, 'info');
+      });
+      btnMobile.addEventListener('click', () => {
+        try { localStorage.setItem('ZR_device_mode','mobile'); } catch(e){}
+        refreshInfo();
+        window.ui && window.ui.detectAndApplyDevice();
+        window.ui && window.ui.showToast('Forced Mobile mode', 2200, 'info');
+      });
+      btnClose.addEventListener('click', () => { panel.style.display = 'none'; });
+
+      // close when clicking elsewhere
+      document.addEventListener('click', (ev) => {
+        if (!panel.contains(ev.target) && ev.target !== btn) panel.style.display = 'none';
+      });
+    } catch (err) { console.warn('dev helper init failed', err); }
   }
 
   updateNavButtons() {
