@@ -29,6 +29,7 @@ class UIManager {
     if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
     this.detectAndApplyDevice();
     this.setupDeviceDropdown();
+    this.setupMobileSearchToggle();
     this.setupVisualizerLoop();
   }
 
@@ -69,6 +70,8 @@ class UIManager {
     this.deviceIndicatorSearch = document.getElementById('device-indicator-search');
     this.deviceIndicatorAccount = document.getElementById('device-indicator-account');
     this.deviceDropdown = document.getElementById('device-dropdown');
+    this.featuredCarousel = null;
+    this.mobileSearchButton = null;
   }
 
   setupPlayerListeners() {
@@ -301,6 +304,72 @@ class UIManager {
     }
   }
 
+  setupFeaturedCarousel() {
+    const el = document.getElementById('featured-carousel');
+    if (!el) return;
+    this.featuredCarousel = el;
+    const slides = Array.from(el.querySelectorAll('.fc-slide'));
+    if (!slides.length) return;
+    let idx = slides.findIndex(s => s.classList.contains('active'));
+    if (idx < 0) idx = 0;
+    let interval = null;
+    const show = (i) => {
+      slides.forEach(s => s.classList.remove('active'));
+      slides[i].classList.add('active');
+    };
+    const start = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(() => {
+        idx = (idx + 1) % slides.length;
+        show(idx);
+      }, 3500);
+      el.dataset.carouselRunning = 'true';
+    };
+    const stop = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+      el.dataset.carouselRunning = 'false';
+    };
+    // Pause on hover/touch
+    el.addEventListener('mouseenter', stop);
+    el.addEventListener('mouseleave', start);
+    el.addEventListener('touchstart', stop);
+    el.addEventListener('touchend', start);
+    // start
+    start();
+  }
+
+  setupMobileSearchToggle() {
+    // show icon-only search on mobile and toggle full input on tap
+    try {
+      const container = this.searchContainer;
+      if (!container) return;
+      // only for mobile
+      if (!document.documentElement.classList.contains('mobile')) return;
+      if (container.querySelector('#mobile-search-btn')) return;
+      const btn = document.createElement('button');
+      btn.id = 'mobile-search-btn';
+      btn.className = 'mobile-search-btn';
+      btn.setAttribute('aria-label', 'Open search');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.533 1.27893C5.42321 1.27893 1.27893 5.42321 1.27893 10.533C1.27893 15.6428 5.42321 19.7871 10.533 19.7871C12.8134 19.7871 14.8993 18.9619 16.5126 17.5855L21.4636 22.5365C21.7565 22.8294 22.2314 22.8294 22.5243 22.5365C22.8172 22.2436 22.8172 21.7687 22.5243 21.4758L17.5855 16.5126C18.9619 14.8993 19.7871 12.8134 19.7871 10.533C19.7871 5.42321 15.6428 1.27893 10.533 1.27893ZM2.77893 10.533C2.77893 6.25055 6.25055 2.77893 10.533 2.77893C14.8155 2.77893 18.2871 6.25055 18.2871 10.533C18.2871 14.8155 14.8155 18.2871 10.533 18.2871C6.25055 18.2871 2.77893 14.8155 2.77893 10.533Z"/></svg>';
+      container.insertBefore(btn, container.firstChild);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.classList.toggle('search-open');
+        const input = this.searchInput;
+        if (container.classList.contains('search-open')) {
+          input && input.focus();
+        } else {
+          input && input.blur();
+        }
+      });
+      // close when tapping outside
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) container.classList.remove('search-open');
+      });
+    } catch (err) { console.warn('mobile search toggle failed', err); }
+  }
+
   updateNavButtons() {
     const btnBack = document.getElementById('btn-history-back');
     const btnForward = document.getElementById('btn-history-forward');
@@ -443,6 +512,19 @@ class UIManager {
             `).join('')}
           </div>
         </div>
+
+        <section class="featured-carousel-section">
+          <div id="featured-carousel" class="featured-carousel">
+            ${featuredSongs.map((t, i) => `
+              <div class="fc-slide ${i===0? 'active':''}" style="background-image: url('${t.cover || 'assets/zr-logo.jpg'}')" data-index="${i}">
+                <div class="fc-overlay">
+                  <h3 class="fc-title">${t.title}</h3>
+                  <p class="fc-sub">${t.artist}</p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
 
         <section class="shelf-section">
           <div class="shelf-header">
