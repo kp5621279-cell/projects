@@ -7,7 +7,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getFirestore, collection, doc, getDocs, setDoc, deleteDoc,
-  query, orderBy
+  query, orderBy, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import {
   getAuth, onAuthStateChanged
@@ -47,15 +47,22 @@ class StorageManager {
     this.userPlaylists = [];
     this.userLikedTrackIds = [];
     this.userLocalTracks = [];
+    this._unsubscribers = [];
     this.init();
 
     // Listen to Firebase auth state changes
     onAuthStateChanged(auth, async (user) => {
       try {
+        // Unsubscribe from old listeners
+        this._unsubscribers.forEach(unsub => unsub());
+        this._unsubscribers = [];
+
         this.setCurrentUser(user);
         if (user) {
           // Full sync: fetch FROM Firestore + push local data TO Firestore
           await this.fullSync();
+          // Start real-time listeners
+          this._startRealtimeListeners();
         } else {
           this.userPlaylists = [];
           this.userLikedTrackIds = [];
@@ -257,6 +264,98 @@ class StorageManager {
     remote.forEach(t => map.set(t.id, t));
     local.forEach(t => map.set(t.id, t));
     return Array.from(map.values());
+  }
+
+  // ============================
+  // REAL-TIME LISTENERS (onSnapshot)
+  // ============================
+
+  /**
+   * Start real-time Firestore listeners.
+   * When any device updates data, this device gets notified instantly.
+   */
+  _startRealtimeListeners() {
+    if (!this.currentUserId) return;
+
+    // Real-time playlists listener
+    const unsubPlaylists = onSnapshot(
+      query(this._userPlaylistsRef(), orderBy('updated_at', 'desc')),
+      (snap) => {
+        const remotePlaylists = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: data.playlist_id || d.id,
+            title: data.title || 'Untitled',
+            description: data.description || '',
+            curator: data.curator || 'You',
+            cover: data.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+            color: data.color || '#1e3264',
+            trackIds: Array.isArray(data.track_ids) ? data.track_ids : [],
+            updated_at: data.updated_at || null
+          };
+        });
+        const localPlaylists = this.getLocalPlaylists();
+        const merged = this._mergePlaylists(localPlaylists, remotePlaylists);
+        this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, merged);
+        this.userPlaylists = merged;
+      },
+      (error) => console.warn('Playlists listener error:', error)
+    );
+    this._unsubscribers.push(unsubPlaylists);
+
+    // Real-time liked tracks listener
+    const unsubLiked = onSnapshot(
+      this._userLikedRef(),
+      (snap) => {
+        const remoteLiked = snap.docs.map(d => d.data().track_id).filter(Boolean);
+        if (remoteLiked.length) {
+          const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
+          const merged = [...new Set([...localLiked, ...remoteLiked])];
+          this.writeJson(STORAGE_KEYS.LIKED_TRACKS, merged);
+          this.userLikedTrackIds = merged;
+        }
+      },
+      (error) => console.warn('Liked tracks listener error:', error)
+    );
+    this._unsubscribers.push(unsubLiked);
+
+    // Real-time search history listener
+    const unsubSearch = onSnapshot(
+      query(this._userSearchRef(), orderBy('created_at', 'desc')),
+      (snap) => {
+        this.userRecentSearches = snap.docs.slice(0, 5).map(d => d.data().query);
+        this.writeJson(STORAGE_KEYS.RECENT_SEARCHES, this.userRecentSearches);
+      },
+      (error) => console.warn('Search history listener error:', error)
+    );
+    this._unsubscribers.push(unsubSearch);
+
+    // Real-time local tracks listener
+    const unsubLocalTracks = onSnapshot(
+      this._userLocalTracksRef(),
+      (snap) => {
+        const remoteTracks = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: data.track_id || d.id,
+            title: data.title || '',
+            artist: data.artist || '',
+            album: data.album || '',
+            duration: data.duration || 0,
+            cover: data.cover || '',
+            audioSrc: data.audioSrc || '',
+            youtubeId: data.youtubeId || '',
+            color: data.color || '#1e3264'
+          };
+        });
+        const localTracks = this.readJson(STORAGE_KEYS.LOCAL_TRACKS, []);
+        const merged = this._mergeLocalTracks(localTracks, remoteTracks);
+        this.writeJson(STORAGE_KEYS.LOCAL_TRACKS, merged);
+        this.userLocalTracks = merged;
+      },
+      (error) => console.warn('Local tracks listener error:', error)
+    );
+    this._unsubscribers.push(unsubLocalTracks);
   }
 
   // ============================

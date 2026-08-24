@@ -19,7 +19,10 @@ class ZRApp {
     window.__ZR_VERSION__ = this.appVersion;
   }
 
-  init() {
+  async init() {
+    // Show splash screen while loading
+    this.showSplash();
+
     ui.init();
     this.bindDOMEvents();
     setupAuth(ui);
@@ -29,7 +32,22 @@ class ZRApp {
     this.checkForAppUpdate();
     this.versionCheckTimer = setInterval(() => this.checkForAppUpdate(), 60000);
 
+    // Hide splash after a short delay (data loaded)
+    setTimeout(() => this.hideSplash(), 1200);
+
     window.ZRApp = this;
+  }
+
+  showSplash() {
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.classList.remove('fade-out');
+  }
+
+  hideSplash() {
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.classList.add('fade-out');
+    // Remove from DOM after animation
+    setTimeout(() => { if (splash) splash.remove(); }, 700);
   }
 
   async checkForAppUpdate() {
