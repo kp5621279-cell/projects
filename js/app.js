@@ -401,6 +401,12 @@ class ZRApp {
           }
           break;
         }
+        case 'open-track-menu': {
+          e.stopPropagation();
+          const playlistId = actionEl.getAttribute('data-playlist-id') || '';
+          this.openContextMenu(e, id, playlistId);
+          break;
+        }
         case 'play-track-in-context': {
           if (!(await this.requireSignedInForPlay())) break;
           const playlistId = actionEl.getAttribute('data-playlist-id');
