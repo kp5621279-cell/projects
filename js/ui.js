@@ -154,6 +154,10 @@ class UIManager {
       case 'artists':
         this.renderArtists();
         break;
+      case 'categories':
+        this.renderCategories();
+        break;
+        break;
       case 'playlists':
         this.renderPlaylists();
         break;
@@ -729,6 +733,33 @@ class UIManager {
               </div>
               <h4 class="shelf-card-title truncate">${a.name}</h4>
               <p class="shelf-card-subtitle">${a.monthlyListeners} listeners</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 7. CATEGORIES DIRECTORY VIEW
+  renderCategories() {
+    const cats = CATEGORIES;
+    this.setDynamicHeaderColor('#2b2b2b');
+
+    this.mainContent.innerHTML = `
+      <div class="view-container categories-directory fade-in">
+        <div class="playlist-directory-header">
+          <div>
+            <p class="playlist-badge">Browse</p>
+            <h1 class="playlist-directory-title">Categories</h1>
+          </div>
+        </div>
+        <div class="category-grid">
+          ${cats.map(c => `
+            <div class="category-card shelf-card" data-action="filter-category" data-title="${c.title}" style="background-color:${c.color};">
+              <div class="shelf-card-thumb-wrap category-thumb">
+                <div class="category-icon">${c.icon}</div>
+              </div>
+              <h4 class="shelf-card-title truncate">${c.title}</h4>
             </div>
           `).join('')}
         </div>

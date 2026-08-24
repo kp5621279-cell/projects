@@ -268,12 +268,14 @@ export const INITIAL_PLAYLISTS = [
 ];
 
 export const CATEGORIES = [
-  { id: "cat-bollywood", title: "Bollywood", color: "#e65100", icon: "🎬" },
-  { id: "cat-punjabi", title: "Punjabi Hits", color: "#ba5d07", icon: "🕺" },
-  { id: "cat-pop", title: "Pop", color: "#8d67ab", icon: "🎤" },
-  { id: "cat-romantic", title: "Romantic", color: "#e91429", icon: "❤️" },
-  { id: "cat-chill", title: "Chill & Lo-Fi", color: "#d84000", icon: "☕" },
-  { id: "cat-synthwave", title: "Synthwave", color: "#e8115b", icon: "🕹️" },
-  { id: "cat-dance", title: "Dance / EDM", color: "#148a08", icon: "⚡" },
-  { id: "cat-hiphop", title: "Hip-Hop", color: "#bc5900", icon: "🎧" }
+  { id: "cat-english", title: "English", color: "#8d67ab", icon: "🇬🇧" },
+  { id: "cat-hindi", title: "Hindi", color: "#e65100", icon: "🇮🇳" },
+  { id: "cat-bollywood", title: "Bollywood", color: "#d84000", icon: "🎬" },
+  { id: "cat-punjabi", title: "Punjabi / Tollywood", color: "#ba5d07", icon: "🕺" },
+  { id: "cat-tamil", title: "Tamil", color: "#ff7a59", icon: "🎭" },
+  { id: "cat-hollywood", title: "Hollywood", color: "#4a90e2", icon: "🎥" },
+  { id: "cat-18plus", title: "18+", color: "#b30000", icon: "🔞" },
+  { id: "cat-pop", title: "Pop", color: "#e91429", icon: "🎤" },
+  { id: "cat-hiphop", title: "Hip-Hop", color: "#bc5900", icon: "🎧" },
+  { id: "cat-chill", title: "Chill & Lo-Fi", color: "#27ae60", icon: "☕" }
 ];
