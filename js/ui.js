@@ -410,15 +410,8 @@ class UIManager {
 
     try {
       const apiUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=25`;
-      console.debug('[ui] fetchOnlineMusicSearch ->', apiUrl);
       const response = await fetch(apiUrl);
-      if (!response.ok) {
-        console.warn('[ui] iTunes search failed:', response.status, response.statusText);
-        this.showToast('Online search failed (network).', 3000, 'warning');
-        return;
-      }
       const data = await response.json();
-      console.debug('[ui] iTunes response:', data && data.resultCount, 'results');
 
       if (data && data.results && data.results.length > 0) {
         const onlineTracks = data.results.map((item, idx) => {
@@ -454,13 +447,9 @@ class UIManager {
         if (this.currentView === 'search' && this.searchQuery.toLowerCase().trim() === query) {
           this.renderSearchResultsHTML(query, uniqueTracks, artists, playlists, false);
         }
-      } else {
-        console.info('[ui] No online results for query:', query);
-      }
       }
     } catch (err) {
-      console.error('[ui] Online search fetch failed:', err);
-      try { this.showToast('Online search error: ' + (err?.message || err), 3500, 'warning'); } catch (e) {}
+      console.log("Online search fetch fallback:", err);
     }
   }
 
