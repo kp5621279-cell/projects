@@ -30,10 +30,28 @@ class StorageManager {
   constructor() {
     this.currentUserId = null;
     this.currentUserEmail = null;
+    this.userRecentSearches = [];
     this.userPlaylists = [];
     this.userLikedTrackIds = [];
     this.init();
     this.loadCurrentSession();
+
+    // react to auth state changes and load user-scoped data only when session.user is present
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        this.setCurrentUser(session?.user || null);
+        if (session?.user) {
+          await this.syncUserDataFromSupabase();
+          await this.fetchUserSearchHistory();
+        } else {
+          this.userPlaylists = [];
+          this.userLikedTrackIds = [];
+          this.userRecentSearches = [];
+        }
+      } catch (err) {
+        console.warn('Error in auth state handler for storage manager', err);
+      }
+    });
   }
 
   getUserScopedKey(baseKey) {
@@ -58,9 +76,7 @@ class StorageManager {
     if (!localStorage.getItem(STORAGE_KEYS.LIKED_TRACKS)) {
       localStorage.setItem(STORAGE_KEYS.LIKED_TRACKS, JSON.stringify(["track-1", "track-2", "track-5"]));
     }
-    if (!localStorage.getItem(STORAGE_KEYS.CUSTOM_PLAYLISTS)) {
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(INITIAL_PLAYLISTS));
-    }
+    // NOTE: playlists are stored in Supabase for signed-in users; do not keep separate CUSTOM_PLAYLISTS in localStorage
     if (!localStorage.getItem(STORAGE_KEYS.LOCAL_TRACKS)) {
       localStorage.setItem(STORAGE_KEYS.LOCAL_TRACKS, JSON.stringify([]));
     }
@@ -98,10 +114,8 @@ class StorageManager {
   async loadCurrentSession() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      // set current user now; actual data sync happens in onAuthStateChange listener
       this.setCurrentUser(session?.user || null);
-      if (session?.user) {
-        await this.syncUserDataFromSupabase();
-      }
     } catch (error) {
       console.warn('Unable to load current Supabase session for storage.', error);
     }
@@ -154,15 +168,11 @@ class StorageManager {
 
       this.userPlaylists = nextPlaylists;
       this.userLikedTrackIds = nextLiked;
-
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
     } catch (error) {
       console.warn('User playlist sync from Supabase unavailable; using default seeded data.', error);
       this.userPlaylists = fallbackPlaylists;
       this.userLikedTrackIds = fallbackLiked;
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), this.userPlaylists);
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), this.userLikedTrackIds);
+      // do not persist playlists to localStorage here (we rely on Supabase for signed-in users)
     }
   }
 
@@ -291,13 +301,8 @@ class StorageManager {
       }
       return this.userPlaylists.length ? this.userPlaylists : [];
     }
-
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_PLAYLISTS));
-      return (stored && stored.length > 0) ? stored : INITIAL_PLAYLISTS;
-    } catch (e) {
-      return INITIAL_PLAYLISTS;
-    }
+    // for guests, return the initial seeded playlists (no localStorage for custom playlists)
+    return INITIAL_PLAYLISTS;
   }
 
   getPlaylistById(id) {
@@ -336,12 +341,9 @@ class StorageManager {
 
     if (this.currentUserId) {
       this.userPlaylists = playlists;
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), playlists);
       this.persistPlaylistToSupabase(newPlaylist);
       return newPlaylist;
     }
-
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(playlists));
     return newPlaylist;
   }
 
@@ -352,10 +354,9 @@ class StorageManager {
       playlists[index] = { ...playlists[index], ...updates };
       if (this.currentUserId) {
         this.userPlaylists = playlists;
-        this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), playlists);
         this.persistPlaylistToSupabase(playlists[index]);
       } else {
-        localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(playlists));
+        // guest: keep in-memory only; do not persist to localStorage
       }
       return playlists[index];
     }
@@ -367,9 +368,9 @@ class StorageManager {
     playlists = playlists.filter(p => p.id !== id);
     if (this.currentUserId) {
       this.userPlaylists = playlists;
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), playlists);
+      // persisted to Supabase; do not store playlists in localStorage
     } else {
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(playlists));
+      // guest: keep changes in-memory only
     }
   }
 
@@ -381,10 +382,9 @@ class StorageManager {
         pl.trackIds.push(trackId);
         if (this.currentUserId) {
           this.userPlaylists = playlists;
-          this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), playlists);
           this.persistPlaylistToSupabase(pl);
         } else {
-          localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(playlists));
+          // guest: keep in-memory only
         }
         return true;
       }
@@ -399,14 +399,26 @@ class StorageManager {
       pl.trackIds = pl.trackIds.filter(id => id !== trackId);
       if (this.currentUserId) {
         this.userPlaylists = playlists;
-        this.writeJson(this.getUserScopedKey(STORAGE_KEYS.CUSTOM_PLAYLISTS), playlists);
         this.persistPlaylistToSupabase(pl);
       } else {
-        localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(playlists));
+        // guest: keep in-memory only
       }
       return true;
     }
     return false;
+  }
+
+  // --- Search history (Supabase-backed for signed-in users) ---
+  async fetchUserSearchHistory() {
+    if (!this.currentUserId) return;
+    try {
+      const { data, error } = await supabase.from('search_history').select('query').eq('user_id', this.currentUserId).order('created_at', { ascending: false }).limit(5);
+      if (error) throw error;
+      this.userRecentSearches = (data || []).map(r => r.query);
+    } catch (err) {
+      console.warn('Could not fetch user search history from Supabase', err);
+      this.userRecentSearches = [];
+    }
   }
 
   // --- Artists ---
@@ -440,24 +452,33 @@ class StorageManager {
   }
 
   getRecentSearches() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.RECENT_SEARCHES)) || [];
-      return Array.isArray(saved) ? saved.map(item => String(item).trim()).filter(Boolean) : [];
-    } catch (e) {
-      return [];
+    // return supabase-backed recent searches for signed-in users; guests have no persistent search history
+    if (this.currentUserId) {
+      return Array.isArray(this.userRecentSearches) ? this.userRecentSearches.slice(0, 5) : [];
     }
+    return [];
   }
 
   addRecentSearch(query) {
     const clean = String(query || '').trim();
-    if (!clean) return;
+    if (!clean || !this.currentUserId) return;
 
-    let searches = this.getRecentSearches();
-    const lower = clean.toLowerCase();
-    searches = searches.filter(item => item.toLowerCase() !== lower);
-    searches.unshift(clean);
-    searches = searches.slice(0, 5);
-    localStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(searches));
+    // insert the new search row, then refresh the in-memory recent list and prune older rows
+    (async () => {
+      try {
+        await supabase.from('search_history').insert({ user_id: this.currentUserId, query: clean });
+        // reload latest 5
+        await this.fetchUserSearchHistory();
+        // optionally prune older rows beyond latest 5
+        const { data: all, error: allErr } = await supabase.from('search_history').select('id').eq('user_id', this.currentUserId).order('created_at', { ascending: false });
+        if (!allErr && Array.isArray(all) && all.length > 5) {
+          const idsToDelete = all.slice(5).map(r => r.id);
+          if (idsToDelete.length) await supabase.from('search_history').delete().in('id', idsToDelete);
+        }
+      } catch (err) {
+        console.warn('Could not add recent search to Supabase', err);
+      }
+    })();
   }
 
   // --- Player Settings Persistence ---
