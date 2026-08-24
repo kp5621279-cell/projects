@@ -323,6 +323,12 @@ class StorageManager {
         const merged = this._mergePlaylists(localPlaylists, remotePlaylists);
         this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, merged);
         this.userPlaylists = merged;
+        // If UI is open on a playlist, refresh it so changes are visible immediately
+        try {
+          if (window.ui && typeof window.ui.renderPlaylist === 'function' && window.ui.currentView === 'playlist') {
+            window.ui.renderPlaylist(window.ui.currentParam);
+          }
+        } catch (e) { console.debug('ui renderPlaylist failed after realtime playlists update', e); }
       },
       (error) => console.warn('Playlists listener error:', error)
     );
@@ -705,10 +711,17 @@ class StorageManager {
         pl.trackIds = [...new Set(pl.trackIds)];
         // write back full list
         this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, stored);
-        if (this.currentUserId) {
-          this.userPlaylists = stored;
-          this._persistPlaylist(pl);
-        }
+        // Always update in-memory playlists to match stored authoritative list
+        this.userPlaylists = stored;
+        try {
+          if (this.currentUserId) this._persistPlaylist(pl);
+        } catch (e) { console.debug('persist playlist failed', e); }
+        // If UI is viewing this playlist, refresh it so changes are visible immediately
+        try {
+          if (window.ui && typeof window.ui.renderPlaylist === 'function' && window.ui.currentView === 'playlist') {
+            window.ui.renderPlaylist(playlistId);
+          }
+        } catch (e) { console.debug('ui renderPlaylist failed after addTrackToPlaylist', e); }
         return true;
       }
     } catch (e) {
@@ -725,10 +738,16 @@ class StorageManager {
       const pl = stored[idx];
       pl.trackIds = (pl.trackIds || []).filter(id => id !== trackId);
       this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, stored);
-      if (this.currentUserId) {
-        this.userPlaylists = stored;
-        this._persistPlaylist(pl);
-      }
+      // Always update in-memory playlists
+      this.userPlaylists = stored;
+      try {
+        if (this.currentUserId) this._persistPlaylist(pl);
+      } catch (e) { console.debug('persist playlist failed', e); }
+      try {
+        if (window.ui && typeof window.ui.renderPlaylist === 'function' && window.ui.currentView === 'playlist') {
+          window.ui.renderPlaylist(playlistId);
+        }
+      } catch (e) { console.debug('ui renderPlaylist failed after removeTrackFromPlaylist', e); }
       return true;
     } catch (e) {
       console.warn('removeTrackFromPlaylist failed', e);
