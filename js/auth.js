@@ -267,11 +267,14 @@ export function setupAuth(ui) {
     submitBtn.textContent = 'Sending...';
 
     try {
+      console.log('[ZR] Sending password reset email to:', email);
       await sendPasswordResetEmail(auth, email);
+      console.log('[ZR] Password reset email sent successfully');
       resetModal.classList.add('hidden');
       resetForm.reset();
-      ui.showToast('Reset link sent! Check your email inbox.', 5000, 'success');
+      ui.showToast('Reset link sent! Check your email inbox (and spam folder).', 5000, 'success');
     } catch (error) {
+      console.error('[ZR] Password reset error:', error.code, error.message);
       const err = getUserFacingAuthError(error.message, 'Could not send reset link.');
       ui.showToast(err.msg, 4500, 'error');
     } finally {
