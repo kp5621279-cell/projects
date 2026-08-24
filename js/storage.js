@@ -47,6 +47,8 @@ class StorageManager {
     this._unsubscribers = [];
     this._playlistPersistTimers = {};
     this._localPlaylistWrites = {}; // track timestamps of local writes
+    this._localPlaylistDeletes = new Set(); // track locally deleted playlist IDs
+    this._localPlaylistCreates = new Set(); // track locally created playlist IDs
     this._initialFetchDone = false;
 
     // Listen to Firebase auth state changes
@@ -272,13 +274,26 @@ class StorageManager {
             // No recent local write — safe to replace
             if (localIdx > -1) {
               this.userPlaylists[localIdx] = remote;
-            } else {
+            } else if (!this._localPlaylistDeletes.has(remote.id)) {
+              // Only add if not locally deleted
               this.userPlaylists.push(remote);
             }
           }
         }
-        // Remove playlists deleted remotely
-        this.userPlaylists = this.userPlaylists.filter(p => remotePlaylists.some(r => r.id === p.id));
+        // Remove playlists deleted remotely, but keep locally created ones not yet in Firestore
+        this.userPlaylists = this.userPlaylists.filter(p => {
+          const inRemote = remotePlaylists.some(r => r.id === p.id);
+          const locallyCreated = this._localPlaylistCreates.has(p.id);
+          const locallyDeleted = this._localPlaylistDeletes.has(p.id);
+          // Keep if: in remote OR locally created (waiting for Firestore sync)
+          // Remove if: not in remote AND not locally created OR locally deleted
+          if (locallyDeleted) return false;
+          if (inRemote) {
+            this._localPlaylistCreates.delete(p.id); // confirmed in Firestore, clean up
+            return true;
+          }
+          return locallyCreated; // keep locally created until Firestore confirms
+        });
         // Refresh UI if viewing a playlist
         try {
           if (window.ui && typeof window.ui.renderPlaylist === 'function' && window.ui.currentView === 'playlist') {
@@ -503,6 +518,8 @@ class StorageManager {
     if (!this.currentUserId) return;
     try {
       await deleteDoc(doc(this._userPlaylistsRef(), playlistId));
+      // Clean up delete tracking after Firestore confirms
+      setTimeout(() => this._localPlaylistDeletes.delete(playlistId), 3000);
     } catch (err) {
       console.warn('Could not delete playlist from Firestore:', err);
     }
@@ -601,6 +618,8 @@ class StorageManager {
       trackIds: []
     };
 
+    // Track as locally created so realtime listener doesn't remove it
+    this._localPlaylistCreates.add(newPlaylist.id);
     // Update in-memory immediately
     this.userPlaylists.unshift(newPlaylist);
     // Persist to Firestore
@@ -619,6 +638,9 @@ class StorageManager {
   }
 
   deletePlaylist(id) {
+    // Track as locally deleted so realtime listener doesn't re-add it
+    this._localPlaylistDeletes.add(id);
+    this._localPlaylistCreates.delete(id);
     this.userPlaylists = this.userPlaylists.filter(p => p.id !== id);
     this._deletePlaylistFromFirestore(id);
   }
