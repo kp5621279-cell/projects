@@ -370,7 +370,29 @@ class UIManager {
 
       const toggle = (e) => {
         e && e.stopPropagation();
-        menu.classList.toggle('hidden');
+        const isHidden = menu.classList.contains('hidden');
+        if (isHidden) {
+          // position menu near the button using fixed coords to avoid overflow/clipping
+          const rect = btn.getBoundingClientRect();
+          menu.style.position = 'fixed';
+          // default left align to button's left
+          let left = rect.left;
+          // ensure menu width is available after rendering
+          menu.style.left = '-9999px';
+          menu.style.top = '-9999px';
+          menu.classList.remove('hidden');
+          requestAnimationFrame(() => {
+            const mw = menu.offsetWidth || 160;
+            const mh = menu.offsetHeight || 120;
+            if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+            let top = rect.bottom + 6;
+            if (top + mh > window.innerHeight - 8) top = Math.max(8, rect.top - mh - 6);
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+          });
+        } else {
+          menu.classList.add('hidden');
+        }
       };
       btn.addEventListener('click', toggle);
       btn.addEventListener('touchstart', (e) => { e.preventDefault(); toggle(e); });

@@ -1602,11 +1602,11 @@ html.mobile .mobile-tabs-btn {
   cursor: pointer;
 }
 .mobile-tabs-btn .mtb-line {
-  width: 18px;
+  width: 12px;
   height: 2px;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.9);
   display: block;
-  margin: 3px 0;
+  margin: 3px auto;
   border-radius: 2px;
 }
 .mobile-tabs-menu {
@@ -1632,6 +1632,26 @@ html.mobile .mobile-tabs-btn {
   border: none;
   font-size: 14px;
 }
+.mobile-tabs-btn.hidden { display: none !important; }
+
+/* Ensure bottom player is fixed and framed on mobile screens (non-forced desktop) */
+html.mobile:not(.force-desktop-ui) .bottom-player-bar {
+  position: fixed !important;
+  left: 8px !important;
+  right: 8px !important;
+  bottom: 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 12px !important;
+  padding: 8px 12px !important;
+  z-index: 1450 !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
+}
+
+/* Center controls in the mini player on mobile */
+html.mobile .player-center { display: flex; justify-content: center; align-items: center; }
+
+/* Ensure player buttons are above other elements */
+html.mobile .bottom-player-bar .btn-main-play-pause { z-index: 1460; }
 .mobile-tab-item:hover { background: rgba(255,255,255,0.03); }
 
 /* --- Artist View --- */
