@@ -216,7 +216,16 @@ class UIManager {
       const widthMobile = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
       const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       let isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile) || widthMobile || coarsePointer;
-      if (saved === 'mobile') isMobile = true;
+      // If user previously forced a mode via localStorage, respect it, but avoid honoring
+      // a forced 'mobile' on obviously desktop environments (large width + fine pointer).
+      if (saved === 'mobile') {
+        const likelyDesktop = (!/Mobi|Android|iPhone|iPad|Mobile/i.test(ua) && !widthMobile && !coarsePointer && window.innerWidth > 900);
+        if (!likelyDesktop) isMobile = true; // honor mobile only when plausible
+        else {
+          // ignore an old/accidental 'mobile' preference on desktop
+          try { if (typeof localStorage !== 'undefined') localStorage.removeItem('ZR_device_mode'); } catch(e){}
+        }
+      }
       if (saved === 'desktop') isMobile = false;
       // expose a class when the user forced desktop via localStorage
       try {
@@ -232,6 +241,7 @@ class UIManager {
       // Show indicator only in account area to avoid duplicate indicators
       if (this.deviceIndicatorSearch) this.deviceIndicatorSearch.style.display = 'none';
       if (this.deviceIndicatorAccount) {
+        this.deviceIndicatorAccount.style.display = ''; // ensure visible
         this.deviceIndicatorAccount.innerHTML = isMobile ? iconPhone : iconPc;
         this.deviceIndicatorAccount.setAttribute('title', isMobile ? 'Device: Mobile' : 'Device: Desktop');
         this.deviceIndicatorAccount.dataset.mode = isMobile ? 'mobile' : 'desktop';
