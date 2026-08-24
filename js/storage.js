@@ -1,22 +1,34 @@
 /**
  * ZR Web Desktop Clone - Storage Manager
- * Hybrid localStorage (primary) + Supabase (background sync) for playlists.
- * localStorage = instant reads, Supabase = cross-device sync.
+ * Hybrid localStorage (primary) + Firebase Firestore (cross-device sync).
+ * localStorage = instant reads, Firestore = cross-device sync.
  */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import {
+  getFirestore, collection, doc, getDocs, setDoc, deleteDoc,
+  query, where, orderBy
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import {
+  getAuth, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, INITIAL_ARTISTS } from './data.js';
 
-const supabaseUrl = 'https://cegogwlqwradaljschcu.supabase.co';
-const supabaseAnonKey = 'sb_publishable_IBY_CeeCB2nlKnnCHBy28A_iRcadxjq';
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyDJqqK_XZbaTQqYV-R4dyCdpNSl5Fvaw08",
+  authDomain: "zr-data.firebaseapp.com",
+  projectId: "zr-data",
+  storageBucket: "zr-data.firebasestorage.app",
+  messagingSenderId: "874656878499",
+  appId: "1:874656878499:web:6f3f9c08498eb62ab49416",
+  measurementId: "G-S3XW79DH5F"
+};
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+export const db = getFirestore(firebaseApp);
+export const auth = getAuth(firebaseApp);
 
 const STORAGE_KEYS = {
   LIKED_TRACKS: 'ZR_liked_tracks',
@@ -34,17 +46,14 @@ class StorageManager {
     this.userRecentSearches = [];
     this.userPlaylists = [];
     this.userLikedTrackIds = [];
-    this._syncQueue = [];
-    this._isSyncing = false;
     this.init();
-    this.loadCurrentSession();
 
-    // react to auth state changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen to Firebase auth state changes
+    onAuthStateChanged(auth, async (user) => {
       try {
-        this.setCurrentUser(session?.user || null);
-        if (session?.user) {
-          await this.syncFromSupabase();
+        this.setCurrentUser(user);
+        if (user) {
+          await this.syncFromFirestore();
           await this.fetchUserSearchHistory();
         } else {
           this.userPlaylists = [];
@@ -103,7 +112,7 @@ class StorageManager {
   }
 
   setCurrentUser(user) {
-    this.currentUserId = user?.id || null;
+    this.currentUserId = user?.uid || null;
     this.currentUserEmail = user?.email || null;
 
     if (!user) {
@@ -117,140 +126,106 @@ class StorageManager {
     this.userLikedTrackIds = this.readJson(STORAGE_KEYS.LIKED_TRACKS, ["track-1", "track-2", "track-5"]);
   }
 
-  async loadCurrentSession() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      this.setCurrentUser(session?.user || null);
-      if (session?.user) {
-        // fire-and-forget: sync from Supabase in background
-        this.syncFromSupabase();
-      }
-    } catch (error) {
-      console.warn('Unable to load current Supabase session for storage.', error);
-    }
+  // ============================
+  // FIRESTORE SYNC
+  // ============================
+
+  /** Get user's playlists subcollection ref */
+  _userPlaylistsRef() {
+    return collection(db, 'users', this.currentUserId, 'playlists');
   }
 
-  // ============================
-  // HYBRID SYNC: localStorage + Supabase
-  // ============================
+  /** Get user's likedTracks subcollection ref */
+  _userLikedRef() {
+    return collection(db, 'users', this.currentUserId, 'likedTracks');
+  }
+
+  /** Get user's searchHistory subcollection ref */
+  _userSearchRef() {
+    return collection(db, 'users', this.currentUserId, 'searchHistory');
+  }
 
   /**
-   * Fetch playlists from Supabase, merge with local, save to both.
-   * Local data wins if both exist (local is the "source of truth" for speed).
+   * Fetch playlists from Firestore, merge with local, save to both.
    */
-  async syncFromSupabase() {
+  async syncFromFirestore() {
     if (!this.currentUserId) return;
 
     try {
-      const [{ data: playlistsData = [], error: playlistsError }, { data: likedData = [], error: likedDataError }] = await Promise.all([
-        supabase.from('playlists').select('*').eq('user_id', this.currentUserId).order('updated_at', { ascending: false }),
-        supabase.from('liked_tracks').select('track_id').eq('user_id', this.currentUserId)
+      // Fetch playlists and liked tracks in parallel
+      const [playlistsSnap, likedSnap] = await Promise.all([
+        getDocs(query(this._userPlaylistsRef(), orderBy('updated_at', 'desc'))),
+        getDocs(this._userLikedRef())
       ]);
 
-      if (playlistsError) throw playlistsError;
-
-      // Parse Supabase playlists
-      const remotePlaylists = (playlistsData || []).map(p => {
-        try {
-          const trackIds = Array.isArray(p.track_ids)
-            ? p.track_ids
-            : JSON.parse(p.track_ids || '[]');
-          return {
-            id: p.playlist_id || p.id,
-            title: p.title,
-            description: p.description || '',
-            curator: p.curator || 'You',
-            cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-            color: p.color || '#1e3264',
-            trackIds: Array.isArray(trackIds) ? trackIds : [],
-            updated_at: p.updated_at || null
-          };
-        } catch (e) {
-          return {
-            id: p.playlist_id || p.id,
-            title: p.title,
-            description: p.description || '',
-            curator: p.curator || 'You',
-            cover: p.cover || '',
-            color: p.color || '#1e3264',
-            trackIds: [],
-            updated_at: p.updated_at || null
-          };
-        }
+      // Parse Firestore playlists
+      const remotePlaylists = playlistsSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: data.playlist_id || d.id,
+          title: data.title || 'Untitled',
+          description: data.description || '',
+          curator: data.curator || 'You',
+          cover: data.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+          color: data.color || '#1e3264',
+          trackIds: Array.isArray(data.track_ids) ? data.track_ids : [],
+          updated_at: data.updated_at || null
+        };
       });
 
-      // Merge: local playlists + remote playlists
+      // Parse liked tracks
+      const remoteLiked = likedSnap.docs.map(d => d.data().track_id).filter(Boolean);
+
+      // Merge: local + remote (local wins)
       const localPlaylists = this.getLocalPlaylists();
       const merged = this.mergePlaylists(localPlaylists, remotePlaylists);
 
-      // Save merged result to localStorage
       this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, merged);
       this.userPlaylists = merged;
 
       // Merge liked tracks
-      if (!likedDataError) {
-        const remoteLiked = (likedData || []).map(item => item.track_id);
-        if (remoteLiked.length) {
-          const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
-          const mergedLiked = [...new Set([...localLiked, ...remoteLiked])];
-          this.writeJson(STORAGE_KEYS.LIKED_TRACKS, mergedLiked);
-          this.userLikedTrackIds = mergedLiked;
-        }
+      if (remoteLiked.length) {
+        const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
+        const mergedLiked = [...new Set([...localLiked, ...remoteLiked])];
+        this.writeJson(STORAGE_KEYS.LIKED_TRACKS, mergedLiked);
+        this.userLikedTrackIds = mergedLiked;
       }
 
-      // Also push any local-only playlists TO Supabase (background)
-      this.syncToSupabase(merged);
+      // Push local-only playlists TO Firestore (background)
+      this._syncToFirestore(merged);
     } catch (error) {
-      console.warn('Supabase sync failed; using localStorage data.', error);
-      // Ensure we at least have local data loaded
+      console.warn('Firestore sync failed; using localStorage data.', error);
       if (!this.userPlaylists.length) {
         this.userPlaylists = this.getLocalPlaylists();
       }
     }
   }
 
-  /**
-   * Merge local and remote playlists.
-   * - Local playlists take priority (faster edits)
-   * - Remote playlists not in local are added
-   * - Deduplicates by playlist id
-   */
+  /** Merge local and remote playlists. Local wins on conflicts. */
   mergePlaylists(local, remote) {
     const map = new Map();
-
-    // Add remote first (lower priority)
-    remote.forEach(p => {
-      map.set(p.id, p);
-    });
-
-    // Overlay local (higher priority)
-    local.forEach(p => {
-      map.set(p.id, p);
-    });
-
+    remote.forEach(p => map.set(p.id, p));
+    local.forEach(p => map.set(p.id, p));
     return Array.from(map.values());
   }
 
-  /**
-   * Push all playlists to Supabase (background, non-blocking).
-   */
-  async syncToSupabase(playlists) {
+  /** Push all playlists to Firestore (background). */
+  async _syncToFirestore(playlists) {
     if (!this.currentUserId || !playlists.length) return;
-
     try {
       for (const pl of playlists) {
-        await this.persistPlaylistToSupabase(pl);
+        await this._persistPlaylist(pl);
       }
     } catch (error) {
-      console.warn('Background Supabase sync failed', error);
+      console.warn('Background Firestore sync failed', error);
     }
   }
 
-  async persistPlaylistToSupabase(playlist) {
+  /** Persist a single playlist to Firestore */
+  async _persistPlaylist(playlist) {
     if (!this.currentUserId) return;
-
     try {
-      const payload = {
+      await setDoc(doc(this._userPlaylistsRef(), playlist.id), {
         user_id: this.currentUserId,
         playlist_id: playlist.id,
         title: playlist.title,
@@ -260,29 +235,41 @@ class StorageManager {
         curator: playlist.curator || 'You',
         track_ids: playlist.trackIds || [],
         updated_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase.from('playlists').upsert(payload, { onConflict: 'playlist_id' });
-      if (error) throw error;
+      }, { merge: true });
     } catch (error) {
-      console.warn('Could not persist playlist to Supabase.', error);
+      console.warn('Could not persist playlist to Firestore.', error);
     }
   }
 
-  async persistLikedTracksToSupabase() {
+  /** Persist liked tracks to Firestore */
+  async _persistLikedTracks() {
     if (!this.currentUserId) return;
-
     try {
+      // Delete existing
+      const existing = await getDocs(this._userLikedRef());
+      for (const d of existing.docs) {
+        await deleteDoc(d.ref);
+      }
+      // Insert current
       const likedIds = this.getLikedTrackIds();
-      await supabase.from('liked_tracks').delete().eq('user_id', this.currentUserId);
-
-      if (likedIds.length) {
-        const rows = likedIds.map(trackId => ({ user_id: this.currentUserId, track_id: trackId }));
-        const { error } = await supabase.from('liked_tracks').insert(rows);
-        if (error) throw error;
+      for (const trackId of likedIds) {
+        await setDoc(doc(this._userLikedRef(), trackId), {
+          track_id: trackId,
+          user_id: this.currentUserId
+        });
       }
     } catch (error) {
-      console.warn('Could not persist liked tracks to Supabase.', error);
+      console.warn('Could not persist liked tracks to Firestore.', error);
+    }
+  }
+
+  /** Delete a playlist from Firestore */
+  async _deletePlaylistFromFirestore(playlistId) {
+    if (!this.currentUserId) return;
+    try {
+      await deleteDoc(doc(this._userPlaylistsRef(), playlistId));
+    } catch (err) {
+      console.warn('Could not delete playlist from Firestore', err);
     }
   }
 
@@ -291,7 +278,6 @@ class StorageManager {
     if (this.currentUserId) {
       return this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
     }
-
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.LIKED_TRACKS)) || [];
     } catch (e) {
@@ -315,17 +301,16 @@ class StorageManager {
       isNowLiked = true;
     }
 
-    // Always save to localStorage first (instant)
+    // Save to localStorage first
     this.writeJson(STORAGE_KEYS.LIKED_TRACKS, liked);
     if (this.currentUserId) {
       this.userLikedTrackIds = liked;
-      // Background sync to Supabase
-      this.persistLikedTracksToSupabase();
+      this._persistLikedTracks();
     }
     return isNowLiked;
   }
 
-  // --- All Tracks (Default + Local Imports / Online Search Cache) ---
+  // --- All Tracks ---
   getAllTracks() {
     let localTracks = [];
     try {
@@ -333,11 +318,9 @@ class StorageManager {
     } catch (e) {
       localTracks = [];
     }
-
     const trackMap = new Map();
     INITIAL_TRACKS.forEach(t => trackMap.set(t.id, t));
     localTracks.forEach(t => trackMap.set(t.id, t));
-
     return Array.from(trackMap.values());
   }
 
@@ -370,7 +353,6 @@ class StorageManager {
   }
 
   getPlaylists() {
-    // Always return from in-memory (loaded from localStorage on init)
     if (this.currentUserId) {
       return this.userPlaylists.length ? this.userPlaylists : this.getLocalPlaylists();
     }
@@ -411,12 +393,11 @@ class StorageManager {
 
     playlists.unshift(newPlaylist);
 
-    // Always save to localStorage first
+    // Save to localStorage first
     this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
     if (this.currentUserId) {
       this.userPlaylists = playlists;
-      // Background sync to Supabase
-      this.persistPlaylistToSupabase(newPlaylist);
+      this._persistPlaylist(newPlaylist);
     }
     return newPlaylist;
   }
@@ -426,11 +407,10 @@ class StorageManager {
     const index = playlists.findIndex(p => p.id === id);
     if (index > -1) {
       playlists[index] = { ...playlists[index], ...updates };
-      // Always save to localStorage first
       this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
       if (this.currentUserId) {
         this.userPlaylists = playlists;
-        this.persistPlaylistToSupabase(playlists[index]);
+        this._persistPlaylist(playlists[index]);
       }
       return playlists[index];
     }
@@ -440,23 +420,10 @@ class StorageManager {
   deletePlaylist(id) {
     let playlists = this.getPlaylists();
     playlists = playlists.filter(p => p.id !== id);
-    // Always save to localStorage first
     this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
     if (this.currentUserId) {
       this.userPlaylists = playlists;
-      // Also delete from Supabase
-      this.deletePlaylistFromSupabase(id);
-    }
-  }
-
-  async deletePlaylistFromSupabase(playlistId) {
-    if (!this.currentUserId) return;
-    try {
-      await supabase.from('playlists').delete()
-        .eq('user_id', this.currentUserId)
-        .eq('playlist_id', playlistId);
-    } catch (err) {
-      console.warn('Could not delete playlist from Supabase', err);
+      this._deletePlaylistFromFirestore(id);
     }
   }
 
@@ -466,11 +433,10 @@ class StorageManager {
     if (pl) {
       if (!pl.trackIds.includes(trackId)) {
         pl.trackIds.push(trackId);
-        // Always save to localStorage first
         this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
         if (this.currentUserId) {
           this.userPlaylists = playlists;
-          this.persistPlaylistToSupabase(pl);
+          this._persistPlaylist(pl);
         }
         return true;
       }
@@ -483,26 +449,26 @@ class StorageManager {
     const pl = playlists.find(p => p.id === playlistId);
     if (pl) {
       pl.trackIds = pl.trackIds.filter(id => id !== trackId);
-      // Always save to localStorage first
       this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
       if (this.currentUserId) {
         this.userPlaylists = playlists;
-        this.persistPlaylistToSupabase(pl);
+        this._persistPlaylist(pl);
       }
       return true;
     }
     return false;
   }
 
-  // --- Search history (Supabase-backed for signed-in users) ---
+  // --- Search history (Firestore-backed for signed-in users) ---
   async fetchUserSearchHistory() {
     if (!this.currentUserId) return;
     try {
-      const { data, error } = await supabase.from('search_history').select('query').eq('user_id', this.currentUserId).order('created_at', { ascending: false }).limit(5);
-      if (error) throw error;
-      this.userRecentSearches = (data || []).map(r => r.query);
+      const snap = await getDocs(
+        query(this._userSearchRef(), orderBy('created_at', 'desc'))
+      );
+      this.userRecentSearches = snap.docs.slice(0, 5).map(d => d.data().query);
     } catch (err) {
-      console.warn('Could not fetch user search history from Supabase', err);
+      console.warn('Could not fetch user search history from Firestore', err);
       this.userRecentSearches = [];
     }
   }
@@ -541,7 +507,6 @@ class StorageManager {
     if (this.currentUserId) {
       return Array.isArray(this.userRecentSearches) ? this.userRecentSearches.slice(0, 5) : [];
     }
-    // Guests: use localStorage
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.RECENT_SEARCHES)) || [];
       return Array.isArray(saved) ? saved.map(item => String(item).trim()).filter(Boolean) : [];
@@ -555,23 +520,27 @@ class StorageManager {
     if (!clean) return;
 
     if (this.currentUserId) {
-      // Save to Supabase for signed-in users
       (async () => {
         try {
-          await supabase.from('search_history').insert({ user_id: this.currentUserId, query: clean });
+          const searchId = `search-${Date.now()}`;
+          await setDoc(doc(this._userSearchRef(), searchId), {
+            query: clean,
+            user_id: this.currentUserId,
+            created_at: new Date().toISOString()
+          });
           await this.fetchUserSearchHistory();
-          // prune older rows beyond latest 5
-          const { data: all, error: allErr } = await supabase.from('search_history').select('id').eq('user_id', this.currentUserId).order('created_at', { ascending: false });
-          if (!allErr && Array.isArray(all) && all.length > 5) {
-            const idsToDelete = all.slice(5).map(r => r.id);
-            if (idsToDelete.length) await supabase.from('search_history').delete().in('id', idsToDelete);
+          // Prune older than 5
+          const snap = await getDocs(query(this._userSearchRef(), orderBy('created_at', 'desc')));
+          if (snap.docs.length > 5) {
+            for (const d of snap.docs.slice(5)) {
+              await deleteDoc(d.ref);
+            }
           }
         } catch (err) {
-          console.warn('Could not add recent search to Supabase', err);
+          console.warn('Could not add recent search to Firestore', err);
         }
       })();
     } else {
-      // Guests: localStorage only
       let searches = this.getRecentSearches();
       const lower = clean.toLowerCase();
       searches = searches.filter(item => item.toLowerCase() !== lower);

@@ -1,9 +1,14 @@
-import { storage, supabase } from './storage.js';
+/**
+ * ZR Web Desktop Clone - Firebase Auth Manager
+ * Handles Google sign-in, email/password auth, and UI sync.
+ */
 
-const getRedirectUrl = () => {
-  const currentOrigin = window.location.origin;
-  return currentOrigin && currentOrigin !== 'null' ? currentOrigin : 'http://localhost:8000';
-};
+import {
+  signInWithPopup, GoogleAuthProvider,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+import { storage, auth } from './storage.js';
 
 const AUTH_DETAILS_LOTTIE_URL = 'https://lottie.host/59c8ffb0-475e-4ded-8b67-daf0b4e419c9/v7ZGjorg5f.json';
 
@@ -72,28 +77,27 @@ function getUserFacingAuthError(message, fallback = 'Something went wrong. Pleas
   const text = String(message || fallback).trim();
   const lower = text.toLowerCase();
 
-  if (lower.includes('rate limit') || lower.includes('too many requests') || lower.includes('email rate limit')) {
+  if (lower.includes('rate limit') || lower.includes('too many requests')) {
     return 'Too many sign-up attempts. Please wait a moment and try again.';
   }
-
-  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
+  if (lower.includes('invalid-credential') || lower.includes('invalid login credentials') || lower.includes('wrong-password') || lower.includes('user-not-found')) {
     return 'Incorrect email or password.';
   }
-
-  if (lower.includes('user already registered') || lower.includes('already exists')) {
+  if (lower.includes('email-already-in-use') || lower.includes('user already registered') || lower.includes('already exists')) {
     return 'An account with this email already exists.';
   }
-
   if (lower.includes('email not confirmed') || lower.includes('confirm your email')) {
     return 'Please confirm your email before signing in.';
+  }
+  if (lower.includes('weak-password') || lower.includes('password')) {
+    return 'Password must be at least 6 characters long.';
   }
 
   return text || fallback;
 }
 
 export async function isUserSignedIn() {
-  const { data } = await supabase.auth.getSession();
-  return !!data.session?.user?.email;
+  return !!auth.currentUser;
 }
 
 export function setupAuth(ui) {
@@ -101,15 +105,14 @@ export function setupAuth(ui) {
   const getStartedButton = document.getElementById('btn-yt-add-quick');
   if (!signInButton) return;
 
-  const syncAuthUI = (session) => {
-    const isSignedIn = !!session?.user?.email;
+  const syncAuthUI = (user) => {
+    const isSignedIn = !!user;
     if (getStartedButton) {
       getStartedButton.style.display = isSignedIn ? 'none' : '';
     }
 
     if (isSignedIn) {
-      const user = session.user;
-      const displayName = user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Account';
+      const displayName = user.displayName || user.email || 'Account';
       const buttonLabel = displayName.includes('@') ? displayName.split('@')[0].trim() : displayName.trim() || 'Account';
       signInButton.textContent = buttonLabel;
       signInButton.title = 'Account';
@@ -140,11 +143,6 @@ export function setupAuth(ui) {
           <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters"></label>
           <button class="auth-submit" id="auth-submit" type="submit">Sign In</button>
         </form>
-        <button class="auth-otp-link" id="auth-otp-request" type="button">Use an email verification code instead</button>
-        <form id="otp-form" class="hidden">
-          <label>Verification code<input id="auth-otp" inputmode="numeric" maxlength="8" placeholder="Enter email code" required></label>
-          <button class="auth-submit" type="submit">Verify code</button>
-        </form>
         <p class="auth-switch"><span id="auth-switch-copy">New here?</span> <button id="auth-mode-toggle" type="button">Create an account</button></p>
       </div>
     </div>
@@ -152,7 +150,6 @@ export function setupAuth(ui) {
 
   const modal = document.getElementById('auth-modal');
   const form = document.getElementById('auth-form');
-  const otpForm = document.getElementById('otp-form');
   let mode = 'signin';
 
   const show = (nextMode = 'signin') => {
@@ -164,7 +161,6 @@ export function setupAuth(ui) {
     document.getElementById('auth-submit').textContent = mode === 'signup' ? 'Create account' : 'Sign In';
     document.getElementById('auth-switch-copy').textContent = mode === 'signup' ? 'Already have an account?' : 'New here?';
     document.getElementById('auth-mode-toggle').textContent = mode === 'signup' ? 'Sign in' : 'Create an account';
-    otpForm.classList.add('hidden');
     modal.classList.remove('hidden');
   };
 
@@ -177,61 +173,68 @@ export function setupAuth(ui) {
   };
 
   signInButton.addEventListener('click', async () => {
-    const session = (await supabase.auth.getSession()).data.session;
-    if (session?.user?.email) {
+    if (auth.currentUser) {
       const isHidden = accountMenu?.classList.contains('hidden');
       toggleAccountMenu(isHidden);
       return;
     }
     show('signin');
   });
+
   getStartedButton?.addEventListener('click', async (event) => {
     event.preventDefault();
-    const session = (await supabase.auth.getSession()).data.session;
-    if (session?.user?.email) return;
+    if (auth.currentUser) return;
     show('signup');
   });
+
   modal.querySelector('.auth-close').addEventListener('click', () => {
     modal.classList.add('hidden');
-    otpForm.classList.add('hidden');
     form.reset();
   });
-  modal.addEventListener('click', (event) => { if (event.target === modal) {
-    modal.classList.add('hidden');
-    otpForm.classList.add('hidden');
-    form.reset();
-  } });
-  document.getElementById('auth-mode-toggle').addEventListener('click', () => show(mode === 'signup' ? 'signin' : 'signup'));
-  document.getElementById('logout-account-btn')?.addEventListener('click', async () => {
-    const { error } = await supabase.auth.signOut();
-    toggleAccountMenu(false);
-    if (error) {
-      ui.showToast(error.message);
-      return;
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      modal.classList.add('hidden');
+      form.reset();
     }
-    ui.showToast('Signed out successfully.');
   });
+
+  document.getElementById('auth-mode-toggle').addEventListener('click', () => show(mode === 'signup' ? 'signin' : 'signup'));
+
+  document.getElementById('logout-account-btn')?.addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+      toggleAccountMenu(false);
+      ui.showToast('Signed out successfully.');
+    } catch (error) {
+      ui.showToast(error.message);
+    }
+  });
+
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.btn-sign-in') && !event.target.closest('#account-menu')) {
       toggleAccountMenu(false);
     }
   });
 
+  // Google Sign-In
   document.getElementById('auth-google').addEventListener('click', async () => {
-    const redirectTo = getRedirectUrl();
     showAuthDetailsLoader();
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo }
-    });
-
-    if (error) {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      modal.classList.add('hidden');
+      await waitForUserDetailsFetch();
+      ui.showToast('Signed in successfully.');
+    } catch (error) {
       hideAuthDetailsLoader();
-      ui.showToast(error.message);
+      if (error.code !== 'auth/popup-closed-by-user') {
+        ui.showToast(getUserFacingAuthError(error.message, 'Google sign-in failed.'));
+      }
     }
   });
 
+  // Email/Password Form
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const emailInput = document.getElementById('auth-email');
@@ -256,74 +259,27 @@ export function setupAuth(ui) {
     submitButton.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
 
     try {
-      const redirectTo = getRedirectUrl();
-      const result = mode === 'signup'
-        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } })
-        : await supabase.auth.signInWithPassword({ email, password });
-
-      if (result.error) {
-        ui.showToast(getUserFacingAuthError(result.error.message, 'Unable to complete authentication.'));
-        return;
+      if (mode === 'signup') {
+        await createUserWithEmailAndPassword(auth, email, password);
+        modal.classList.add('hidden');
+        await waitForUserDetailsFetch();
+        ui.showToast('Account created successfully.');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        modal.classList.add('hidden');
+        await waitForUserDetailsFetch();
+        ui.showToast('Signed in successfully.');
       }
-
-      if (mode === 'signup' && !result.data.session) {
-        ui.showToast('Check your email to confirm your account.');
-        form.reset();
-        return;
-      }
-
-      modal.classList.add('hidden');
-      await waitForUserDetailsFetch();
-      ui.showToast('Signed in successfully.');
     } catch (error) {
-      ui.showToast(getUserFacingAuthError(error?.message, 'Something went wrong. Please try again.'));
+      ui.showToast(getUserFacingAuthError(error.message, 'Unable to complete authentication.'));
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = mode === 'signup' ? 'Create account' : 'Sign In';
     }
   });
 
-  document.getElementById('auth-otp-request').addEventListener('click', async () => {
-    const email = document.getElementById('auth-email').value.trim();
-    if (!email) return ui.showToast('Enter your email address first.');
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: getRedirectUrl()
-      }
-    });
-    if (error) return ui.showToast(error.message);
-    otpForm.classList.remove('hidden');
-    ui.showToast('Verification code sent. Check your email.');
-  });
-
-  otpForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = document.getElementById('auth-email').value.trim();
-    const token = document.getElementById('auth-otp').value.trim();
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
-    if (error) return ui.showToast(error.message);
-    modal.classList.add('hidden');
-    await waitForUserDetailsFetch();
-    ui.showToast('Email verified and signed in.');
-  });
-
-  supabase.auth.onAuthStateChange(async (_event, session) => {
-    storage.setCurrentUser(session?.user || null);
-    if (session?.user) {
-      await storage.syncFromSupabase();
-    }
-    syncAuthUI(session);
-  });
-
-  supabase.auth.getSession().then(async ({ data }) => {
-    const session = data.session;
-    storage.setCurrentUser(session?.user || null);
-    if (session?.user) {
-      await storage.syncFromSupabase();
-    }
-    syncAuthUI(session);
+  // Listen to auth state changes (Firebase handles this)
+  onAuthStateChanged(auth, (user) => {
+    syncAuthUI(user);
   });
 }
-
