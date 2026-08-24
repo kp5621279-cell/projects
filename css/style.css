@@ -1316,7 +1316,9 @@ html.mobile .main-content { padding-bottom: 120px !important; }
 }
 
 /* Mobile search icon button */
-.mobile-search-btn { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); margin-right: 8px; border: 0; color: var(--ZR-text-subdued); }
+.mobile-search-btn { width: 36px; height: 36px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); margin-right: 8px; border: 0; color: var(--ZR-text-subdued); }
+.mobile-search-btn svg { pointer-events: none; }
+html.mobile .mobile-search-btn { display: inline-flex !important; }
 .topbar-search-box.search-open .topbar-search-input { display: block !important; }
 @media (max-width: 1024px) {
   .topbar-search-box .topbar-search-input { display: none; }

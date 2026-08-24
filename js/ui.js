@@ -344,8 +344,6 @@ class UIManager {
     try {
       const container = this.searchContainer;
       if (!container) return;
-      // only for mobile
-      if (!document.documentElement.classList.contains('mobile')) return;
       if (container.querySelector('#mobile-search-btn')) return;
       const btn = document.createElement('button');
       btn.id = 'mobile-search-btn';
@@ -353,16 +351,18 @@ class UIManager {
       btn.setAttribute('aria-label', 'Open search');
       btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.533 1.27893C5.42321 1.27893 1.27893 5.42321 1.27893 10.533C1.27893 15.6428 5.42321 19.7871 10.533 19.7871C12.8134 19.7871 14.8993 18.9619 16.5126 17.5855L21.4636 22.5365C21.7565 22.8294 22.2314 22.8294 22.5243 22.5365C22.8172 22.2436 22.8172 21.7687 22.5243 21.4758L17.5855 16.5126C18.9619 14.8993 19.7871 12.8134 19.7871 10.533C19.7871 5.42321 15.6428 1.27893 10.533 1.27893ZM2.77893 10.533C2.77893 6.25055 6.25055 2.77893 10.533 2.77893C14.8155 2.77893 18.2871 6.25055 18.2871 10.533C18.2871 14.8155 14.8155 18.2871 10.533 18.2871C6.25055 18.2871 2.77893 14.8155 2.77893 10.533Z"/></svg>';
       container.insertBefore(btn, container.firstChild);
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
+      const toggle = (e) => {
+        try { e && e.stopPropagation(); e && e.preventDefault(); } catch(err){}
         container.classList.toggle('search-open');
         const input = this.searchInput;
         if (container.classList.contains('search-open')) {
-          input && input.focus();
+          setTimeout(() => { try { input && input.focus(); } catch(e){} }, 60);
         } else {
-          input && input.blur();
+          try { input && input.blur(); } catch(e){}
         }
-      });
+      };
+      btn.addEventListener('click', toggle);
+      btn.addEventListener('touchstart', toggle);
       // close when tapping outside
       document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) container.classList.remove('search-open');
