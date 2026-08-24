@@ -1647,8 +1647,17 @@ html.mobile:not(.force-desktop-ui) .bottom-player-bar {
   box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
 }
 
-/* Center controls in the mini player on mobile */
-html.mobile .player-center { display: flex; justify-content: center; align-items: center; }
+/* Center controls in the mini player on mobile (mini layout) */
+html.mobile:not(.force-desktop-ui) .player-center {
+  display: flex;
+  flex-direction: row !important;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Hide long timeline in mini player to keep controls vertically centered */
+html.mobile:not(.force-desktop-ui) .player-timeline-wrapper { display: none !important; }
 
 /* Ensure player buttons are above other elements */
 html.mobile .bottom-player-bar .btn-main-play-pause { z-index: 1460; }
