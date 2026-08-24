@@ -29,8 +29,11 @@ class ZRApp {
     this.bindKeyboardShortcuts();
     this.bindDragAndDrop();
     this.loadInitialTrack();
-    this.checkForAppUpdate();
-    this.versionCheckTimer = setInterval(() => this.checkForAppUpdate(), 60000);
+    // Update checks disabled per user request to avoid spurious 'Update available' modal.
+    // this.checkForAppUpdate();
+    // this.versionCheckTimer = setInterval(() => this.checkForAppUpdate(), 60000);
+    this.versionStatus = 'disabled';
+    window.__ZR_VERSION_STATUS__ = this.versionStatus;
 
     // Hide splash after a short delay (data loaded)
     setTimeout(() => this.hideSplash(), 1200);
