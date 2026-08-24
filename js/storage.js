@@ -1,6 +1,7 @@
 /**
  * ZR Web Desktop Clone - Storage Manager
- * Handles local storage persistence for playlists, liked songs, history, custom tracks, and player preferences.
+ * Hybrid localStorage (primary) + Supabase (background sync) for playlists.
+ * localStorage = instant reads, Supabase = cross-device sync.
  */
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -33,15 +34,17 @@ class StorageManager {
     this.userRecentSearches = [];
     this.userPlaylists = [];
     this.userLikedTrackIds = [];
+    this._syncQueue = [];
+    this._isSyncing = false;
     this.init();
     this.loadCurrentSession();
 
-    // react to auth state changes and load user-scoped data only when session.user is present
+    // react to auth state changes
     supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
         this.setCurrentUser(session?.user || null);
         if (session?.user) {
-          await this.syncUserDataFromSupabase();
+          await this.syncFromSupabase();
           await this.fetchUserSearchHistory();
         } else {
           this.userPlaylists = [];
@@ -76,7 +79,9 @@ class StorageManager {
     if (!localStorage.getItem(STORAGE_KEYS.LIKED_TRACKS)) {
       localStorage.setItem(STORAGE_KEYS.LIKED_TRACKS, JSON.stringify(["track-1", "track-2", "track-5"]));
     }
-    // NOTE: playlists are stored in Supabase for signed-in users; do not keep separate CUSTOM_PLAYLISTS in localStorage
+    if (!localStorage.getItem(STORAGE_KEYS.CUSTOM_PLAYLISTS)) {
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_PLAYLISTS, JSON.stringify(INITIAL_PLAYLISTS));
+    }
     if (!localStorage.getItem(STORAGE_KEYS.LOCAL_TRACKS)) {
       localStorage.setItem(STORAGE_KEYS.LOCAL_TRACKS, JSON.stringify([]));
     }
@@ -107,36 +112,45 @@ class StorageManager {
       return;
     }
 
-    this.userPlaylists = [];
-    this.userLikedTrackIds = [];
+    // load from localStorage immediately so UI is never empty
+    this.userPlaylists = this.getLocalPlaylists();
+    this.userLikedTrackIds = this.readJson(STORAGE_KEYS.LIKED_TRACKS, ["track-1", "track-2", "track-5"]);
   }
 
   async loadCurrentSession() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      // set current user now; actual data sync happens in onAuthStateChange listener
       this.setCurrentUser(session?.user || null);
+      if (session?.user) {
+        // fire-and-forget: sync from Supabase in background
+        this.syncFromSupabase();
+      }
     } catch (error) {
       console.warn('Unable to load current Supabase session for storage.', error);
     }
   }
 
-  async syncUserDataFromSupabase() {
+  // ============================
+  // HYBRID SYNC: localStorage + Supabase
+  // ============================
+
+  /**
+   * Fetch playlists from Supabase, merge with local, save to both.
+   * Local data wins if both exist (local is the "source of truth" for speed).
+   */
+  async syncFromSupabase() {
     if (!this.currentUserId) return;
 
-    const fallbackPlaylists = INITIAL_PLAYLISTS;
-    const fallbackLiked = ["track-1", "track-2", "track-5"];
-
     try {
-      const [{ data: playlistsData = [], error: playlistsError }, { data: likedData = [], error: likedError }] = await Promise.all([
+      const [{ data: playlistsData = [], error: playlistsError }, { data: likedData = [], error: likedDataError }] = await Promise.all([
         supabase.from('playlists').select('*').eq('user_id', this.currentUserId).order('updated_at', { ascending: false }),
         supabase.from('liked_tracks').select('track_id').eq('user_id', this.currentUserId)
       ]);
 
       if (playlistsError) throw playlistsError;
-      if (likedError) throw likedError;
 
-      const syncedPlaylists = (playlistsData || []).map(p => {
+      // Parse Supabase playlists
+      const remotePlaylists = (playlistsData || []).map(p => {
         try {
           const trackIds = Array.isArray(p.track_ids)
             ? p.track_ids
@@ -148,31 +162,87 @@ class StorageManager {
             curator: p.curator || 'You',
             cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
             color: p.color || '#1e3264',
-            trackIds: Array.isArray(trackIds) ? trackIds : []
+            trackIds: Array.isArray(trackIds) ? trackIds : [],
+            updated_at: p.updated_at || null
           };
-        } catch (error) {
+        } catch (e) {
           return {
             id: p.playlist_id || p.id,
             title: p.title,
             description: p.description || '',
             curator: p.curator || 'You',
-            cover: p.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+            cover: p.cover || '',
             color: p.color || '#1e3264',
-            trackIds: []
+            trackIds: [],
+            updated_at: p.updated_at || null
           };
         }
       });
 
-      const nextPlaylists = syncedPlaylists.length ? syncedPlaylists : fallbackPlaylists;
-      const nextLiked = (likedData || []).map(item => item.track_id).length ? (likedData || []).map(item => item.track_id) : fallbackLiked;
+      // Merge: local playlists + remote playlists
+      const localPlaylists = this.getLocalPlaylists();
+      const merged = this.mergePlaylists(localPlaylists, remotePlaylists);
 
-      this.userPlaylists = nextPlaylists;
-      this.userLikedTrackIds = nextLiked;
+      // Save merged result to localStorage
+      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, merged);
+      this.userPlaylists = merged;
+
+      // Merge liked tracks
+      if (!likedDataError) {
+        const remoteLiked = (likedData || []).map(item => item.track_id);
+        if (remoteLiked.length) {
+          const localLiked = this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
+          const mergedLiked = [...new Set([...localLiked, ...remoteLiked])];
+          this.writeJson(STORAGE_KEYS.LIKED_TRACKS, mergedLiked);
+          this.userLikedTrackIds = mergedLiked;
+        }
+      }
+
+      // Also push any local-only playlists TO Supabase (background)
+      this.syncToSupabase(merged);
     } catch (error) {
-      console.warn('User playlist sync from Supabase unavailable; using default seeded data.', error);
-      this.userPlaylists = fallbackPlaylists;
-      this.userLikedTrackIds = fallbackLiked;
-      // do not persist playlists to localStorage here (we rely on Supabase for signed-in users)
+      console.warn('Supabase sync failed; using localStorage data.', error);
+      // Ensure we at least have local data loaded
+      if (!this.userPlaylists.length) {
+        this.userPlaylists = this.getLocalPlaylists();
+      }
+    }
+  }
+
+  /**
+   * Merge local and remote playlists.
+   * - Local playlists take priority (faster edits)
+   * - Remote playlists not in local are added
+   * - Deduplicates by playlist id
+   */
+  mergePlaylists(local, remote) {
+    const map = new Map();
+
+    // Add remote first (lower priority)
+    remote.forEach(p => {
+      map.set(p.id, p);
+    });
+
+    // Overlay local (higher priority)
+    local.forEach(p => {
+      map.set(p.id, p);
+    });
+
+    return Array.from(map.values());
+  }
+
+  /**
+   * Push all playlists to Supabase (background, non-blocking).
+   */
+  async syncToSupabase(playlists) {
+    if (!this.currentUserId || !playlists.length) return;
+
+    try {
+      for (const pl of playlists) {
+        await this.persistPlaylistToSupabase(pl);
+      }
+    } catch (error) {
+      console.warn('Background Supabase sync failed', error);
     }
   }
 
@@ -219,10 +289,7 @@ class StorageManager {
   // --- Liked Tracks ---
   getLikedTrackIds() {
     if (this.currentUserId) {
-      if (!this.userLikedTrackIds.length) {
-        this.syncUserDataFromSupabase();
-      }
-      return this.userLikedTrackIds.length ? this.userLikedTrackIds : [];
+      return this.userLikedTrackIds.length ? this.userLikedTrackIds : this.readJson(STORAGE_KEYS.LIKED_TRACKS, []);
     }
 
     try {
@@ -248,14 +315,13 @@ class StorageManager {
       isNowLiked = true;
     }
 
+    // Always save to localStorage first (instant)
+    this.writeJson(STORAGE_KEYS.LIKED_TRACKS, liked);
     if (this.currentUserId) {
       this.userLikedTrackIds = liked;
-      this.writeJson(this.getUserScopedKey(STORAGE_KEYS.LIKED_TRACKS), liked);
+      // Background sync to Supabase
       this.persistLikedTracksToSupabase();
-      return isNowLiked;
     }
-
-    localStorage.setItem(STORAGE_KEYS.LIKED_TRACKS, JSON.stringify(liked));
     return isNowLiked;
   }
 
@@ -294,15 +360,21 @@ class StorageManager {
   }
 
   // --- Playlists ---
-  getPlaylists() {
-    if (this.currentUserId) {
-      if (!this.userPlaylists.length) {
-        this.syncUserDataFromSupabase();
-      }
-      return this.userPlaylists.length ? this.userPlaylists : [];
+  getLocalPlaylists() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_PLAYLISTS));
+      return (stored && stored.length > 0) ? stored : INITIAL_PLAYLISTS;
+    } catch (e) {
+      return INITIAL_PLAYLISTS;
     }
-    // for guests, return the initial seeded playlists (no localStorage for custom playlists)
-    return INITIAL_PLAYLISTS;
+  }
+
+  getPlaylists() {
+    // Always return from in-memory (loaded from localStorage on init)
+    if (this.currentUserId) {
+      return this.userPlaylists.length ? this.userPlaylists : this.getLocalPlaylists();
+    }
+    return this.getLocalPlaylists();
   }
 
   getPlaylistById(id) {
@@ -339,10 +411,12 @@ class StorageManager {
 
     playlists.unshift(newPlaylist);
 
+    // Always save to localStorage first
+    this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
     if (this.currentUserId) {
       this.userPlaylists = playlists;
+      // Background sync to Supabase
       this.persistPlaylistToSupabase(newPlaylist);
-      return newPlaylist;
     }
     return newPlaylist;
   }
@@ -352,11 +426,11 @@ class StorageManager {
     const index = playlists.findIndex(p => p.id === id);
     if (index > -1) {
       playlists[index] = { ...playlists[index], ...updates };
+      // Always save to localStorage first
+      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
       if (this.currentUserId) {
         this.userPlaylists = playlists;
         this.persistPlaylistToSupabase(playlists[index]);
-      } else {
-        // guest: keep in-memory only; do not persist to localStorage
       }
       return playlists[index];
     }
@@ -366,11 +440,23 @@ class StorageManager {
   deletePlaylist(id) {
     let playlists = this.getPlaylists();
     playlists = playlists.filter(p => p.id !== id);
+    // Always save to localStorage first
+    this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
     if (this.currentUserId) {
       this.userPlaylists = playlists;
-      // persisted to Supabase; do not store playlists in localStorage
-    } else {
-      // guest: keep changes in-memory only
+      // Also delete from Supabase
+      this.deletePlaylistFromSupabase(id);
+    }
+  }
+
+  async deletePlaylistFromSupabase(playlistId) {
+    if (!this.currentUserId) return;
+    try {
+      await supabase.from('playlists').delete()
+        .eq('user_id', this.currentUserId)
+        .eq('playlist_id', playlistId);
+    } catch (err) {
+      console.warn('Could not delete playlist from Supabase', err);
     }
   }
 
@@ -380,11 +466,11 @@ class StorageManager {
     if (pl) {
       if (!pl.trackIds.includes(trackId)) {
         pl.trackIds.push(trackId);
+        // Always save to localStorage first
+        this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
         if (this.currentUserId) {
           this.userPlaylists = playlists;
           this.persistPlaylistToSupabase(pl);
-        } else {
-          // guest: keep in-memory only
         }
         return true;
       }
@@ -397,11 +483,11 @@ class StorageManager {
     const pl = playlists.find(p => p.id === playlistId);
     if (pl) {
       pl.trackIds = pl.trackIds.filter(id => id !== trackId);
+      // Always save to localStorage first
+      this.writeJson(STORAGE_KEYS.CUSTOM_PLAYLISTS, playlists);
       if (this.currentUserId) {
         this.userPlaylists = playlists;
         this.persistPlaylistToSupabase(pl);
-      } else {
-        // guest: keep in-memory only
       }
       return true;
     }
@@ -452,33 +538,47 @@ class StorageManager {
   }
 
   getRecentSearches() {
-    // return supabase-backed recent searches for signed-in users; guests have no persistent search history
     if (this.currentUserId) {
       return Array.isArray(this.userRecentSearches) ? this.userRecentSearches.slice(0, 5) : [];
     }
-    return [];
+    // Guests: use localStorage
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.RECENT_SEARCHES)) || [];
+      return Array.isArray(saved) ? saved.map(item => String(item).trim()).filter(Boolean) : [];
+    } catch (e) {
+      return [];
+    }
   }
 
   addRecentSearch(query) {
     const clean = String(query || '').trim();
-    if (!clean || !this.currentUserId) return;
+    if (!clean) return;
 
-    // insert the new search row, then refresh the in-memory recent list and prune older rows
-    (async () => {
-      try {
-        await supabase.from('search_history').insert({ user_id: this.currentUserId, query: clean });
-        // reload latest 5
-        await this.fetchUserSearchHistory();
-        // optionally prune older rows beyond latest 5
-        const { data: all, error: allErr } = await supabase.from('search_history').select('id').eq('user_id', this.currentUserId).order('created_at', { ascending: false });
-        if (!allErr && Array.isArray(all) && all.length > 5) {
-          const idsToDelete = all.slice(5).map(r => r.id);
-          if (idsToDelete.length) await supabase.from('search_history').delete().in('id', idsToDelete);
+    if (this.currentUserId) {
+      // Save to Supabase for signed-in users
+      (async () => {
+        try {
+          await supabase.from('search_history').insert({ user_id: this.currentUserId, query: clean });
+          await this.fetchUserSearchHistory();
+          // prune older rows beyond latest 5
+          const { data: all, error: allErr } = await supabase.from('search_history').select('id').eq('user_id', this.currentUserId).order('created_at', { ascending: false });
+          if (!allErr && Array.isArray(all) && all.length > 5) {
+            const idsToDelete = all.slice(5).map(r => r.id);
+            if (idsToDelete.length) await supabase.from('search_history').delete().in('id', idsToDelete);
+          }
+        } catch (err) {
+          console.warn('Could not add recent search to Supabase', err);
         }
-      } catch (err) {
-        console.warn('Could not add recent search to Supabase', err);
-      }
-    })();
+      })();
+    } else {
+      // Guests: localStorage only
+      let searches = this.getRecentSearches();
+      const lower = clean.toLowerCase();
+      searches = searches.filter(item => item.toLowerCase() !== lower);
+      searches.unshift(clean);
+      searches = searches.slice(0, 5);
+      localStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(searches));
+    }
   }
 
   // --- Player Settings Persistence ---

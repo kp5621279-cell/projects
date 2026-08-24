@@ -312,7 +312,7 @@ export function setupAuth(ui) {
   supabase.auth.onAuthStateChange(async (_event, session) => {
     storage.setCurrentUser(session?.user || null);
     if (session?.user) {
-      await storage.syncUserDataFromSupabase();
+      await storage.syncFromSupabase();
     }
     syncAuthUI(session);
   });
@@ -321,7 +321,7 @@ export function setupAuth(ui) {
     const session = data.session;
     storage.setCurrentUser(session?.user || null);
     if (session?.user) {
-      await storage.syncUserDataFromSupabase();
+      await storage.syncFromSupabase();
     }
     syncAuthUI(session);
   });

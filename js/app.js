@@ -381,7 +381,7 @@ class ZRApp {
             break;
           }
           ui.showToast('Refreshing playlists...');
-          await storage.syncUserDataFromSupabase();
+          await storage.syncFromSupabase();
           ui.renderSidebarPlaylists();
           ui.navigateTo(ui.currentView || 'playlists', ui.currentParam || null);
           ui.showToast('Playlists synced.');
