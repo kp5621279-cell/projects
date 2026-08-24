@@ -47,7 +47,16 @@ class ZRApp {
     const splash = document.getElementById('splash-screen');
     if (splash) splash.classList.add('fade-out');
     // Remove from DOM after animation
-    setTimeout(() => { if (splash) splash.remove(); }, 700);
+    setTimeout(() => {
+      if (splash) splash.remove();
+      try {
+        // After splash removed, show detected device and login message
+        if (window.ui && typeof window.ui.showToast === 'function') {
+          const label = window.ui.deviceLabel || (document.documentElement.classList.contains('mobile') ? 'Mobile' : 'Desktop');
+          window.ui.showToast(`Device detected: ${label} — Logged in as ${label}`, 4200, 'info');
+        }
+      } catch (e) { console.debug('post-splash toast failed', e); }
+    }, 700);
   }
 
   async checkForAppUpdate() {

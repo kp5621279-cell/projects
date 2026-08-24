@@ -230,6 +230,13 @@ class UIManager {
         this.deviceIndicatorAccount.dataset.mode = isMobile ? 'mobile' : 'desktop';
       }
 
+      // store a friendly device label for later use (toast/message)
+      if (/Android/i.test(ua) || /Mobi|Mobile/i.test(ua)) this.deviceLabel = 'Android';
+      else if (/iPhone|iPad|iPod/i.test(ua)) this.deviceLabel = 'iOS';
+      else if (/Win/i.test(navigator.platform || ua)) this.deviceLabel = 'Windows';
+      else if (/Mac/i.test(navigator.platform || ua)) this.deviceLabel = 'macOS';
+      else this.deviceLabel = isMobile ? 'Mobile' : 'Desktop';
+
       if (isMobile) document.documentElement.classList.add('mobile-layout'); else document.documentElement.classList.remove('mobile-layout');
     } catch (err) {
       console.warn('Device detect failed', err);
