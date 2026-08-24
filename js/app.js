@@ -90,7 +90,7 @@ class ZRApp {
 
   async requireSignedInForPlay() {
     if (await isUserSignedIn()) return true;
-    ui.showToast('Please sign in to play music.');
+    ui.showToast('Please sign in to play music.', 3500, 'warning');
     return false;
   }
 
@@ -182,7 +182,7 @@ class ZRApp {
     // 2. Playback Controls in Player Bar
     document.getElementById('btn-play-pause')?.addEventListener('click', async () => {
       if (!(await isUserSignedIn())) {
-        ui.showToast('Please sign in to play music.');
+        ui.showToast('Please sign in to play music.', 3500, 'warning');
         return;
       }
       player.togglePlay();
@@ -322,9 +322,9 @@ class ZRApp {
           if (playlist && playlist.trackIds.length > 0) {
             const playlistTracks = playlist.trackIds.map(tId => storage.getTrackById(tId)).filter(Boolean);
             player.setQueue(playlistTracks, 0, true);
-            ui.showToast(`Playing playlist "${playlist.title}"`);
+            ui.showToast(`Playing "${playlist.title}"`, 3000, 'success');
           } else {
-            ui.showToast("Playlist is empty");
+            ui.showToast('This playlist is empty. Add some tracks first!', 3500, 'warning');
           }
           break;
         }
@@ -334,7 +334,7 @@ class ZRApp {
           const tracks = storage.getTracksByArtist(id);
           if (tracks.length > 0) {
             player.setQueue(tracks, 0, true);
-            ui.showToast(`Playing artist "${id}"`);
+            ui.showToast(`Playing all tracks by "${id}"`, 3000, 'success');
           }
           break;
         }
@@ -345,9 +345,9 @@ class ZRApp {
           const likedTracks = likedIds.map(tId => storage.getTrackById(tId)).filter(Boolean);
           if (likedTracks.length > 0) {
             player.setQueue(likedTracks, 0, true);
-            ui.showToast("Playing Liked Songs");
+            ui.showToast('Playing your Liked Songs', 3000, 'success');
           } else {
-            ui.showToast("No Liked Songs yet!");
+            ui.showToast('No Liked Songs yet! Tap the heart icon on any track.', 4000, 'info');
           }
           break;
         }
@@ -377,14 +377,14 @@ class ZRApp {
           break;
         case 'refresh-playlists': {
           if (!(await isUserSignedIn())) {
-            ui.showToast('Please sign in to sync playlists.');
+            ui.showToast('Please sign in to sync playlists.', 3500, 'warning');
             break;
           }
-          ui.showToast('Refreshing playlists...');
+          ui.showToast('Refreshing playlists...', 2500, 'info');
           await storage.syncFromFirestore();
           ui.renderSidebarPlaylists();
           ui.navigateTo(ui.currentView || 'playlists', ui.currentParam || null);
-          ui.showToast('Playlists synced.');
+          ui.showToast('Playlists synced successfully!', 3000, 'success');
           break;
         }
         case 'open-file-import':
@@ -415,7 +415,7 @@ class ZRApp {
             storage.deletePlaylist(id);
             ui.renderSidebarPlaylists();
             ui.navigateTo('home');
-            ui.showToast("Playlist deleted");
+            ui.showToast('Playlist deleted', 3000, 'success');
           }
           break;
         }
@@ -423,7 +423,7 @@ class ZRApp {
           const isFollowing = actionEl.textContent === 'FOLLOWING';
           actionEl.textContent = isFollowing ? 'FOLLOW' : 'FOLLOWING';
           actionEl.classList.toggle('following', !isFollowing);
-          ui.showToast(isFollowing ? 'Unfollowed artist' : 'Following artist');
+          ui.showToast(isFollowing ? 'Unfollowed artist' : 'Now following artist!', 3000, 'success');
           break;
         }
       }
@@ -460,7 +460,7 @@ class ZRApp {
 
       const ytId = this.extractYouTubeId(inputVal);
       if (!ytId) {
-        ui.showToast("Invalid YouTube URL or Video ID");
+        ui.showToast('Invalid YouTube URL or Video ID. Please check and try again.', 4000, 'error');
         return;
       }
 
@@ -480,7 +480,7 @@ class ZRApp {
       ui.renderSidebarPlaylists();
       ui.closeModal('create-playlist-modal');
       ui.navigateTo('playlist', newPl.id);
-      ui.showToast(`Playlist "${newPl.title}" created!`);
+      ui.showToast(`Playlist "${newPl.title}" created!`, 3000, 'success');
       e.target.reset();
     });
 
@@ -496,7 +496,7 @@ class ZRApp {
         ui.closeModal('file-import-modal');
         e.target.reset();
       } else {
-        ui.showToast("Please choose an audio file");
+        ui.showToast('Please choose an audio file to import.', 3500, 'warning');
       }
     });
   }
@@ -540,7 +540,7 @@ class ZRApp {
     storage.addLocalTrack(newTrack);
     player.addToQueue(newTrack);
     player.loadTrack(newTrack, true);
-    ui.showToast(`Playing YouTube Track: "${title}"`);
+    ui.showToast(`Now playing: "${title}"`, 3000, 'success');
 
     if (ui.currentView === 'home' || ui.currentView === 'search') {
       ui.navigateTo(ui.currentView, ui.currentParam);
@@ -567,7 +567,7 @@ class ZRApp {
 
   handleToggleLike(trackId) {
     const isNowLiked = storage.toggleLike(trackId);
-    ui.showToast(isNowLiked ? "Added to your Liked Songs" : "Removed from your Liked Songs");
+    ui.showToast(isNowLiked ? 'Added to your Liked Songs ♥' : 'Removed from Liked Songs', 3000, isNowLiked ? 'success' : 'info');
 
     if (player.currentTrack && player.currentTrack.id === trackId) {
       ui.playerLikeBtn.classList.toggle('liked', isNowLiked);
@@ -639,7 +639,7 @@ class ZRApp {
     storage.addLocalTrack(newTrack);
     player.addToQueue(newTrack);
     player.loadTrack(newTrack, true);
-    ui.showToast(`Imported & Playing "${title}"`);
+    ui.showToast(`Imported & playing: "${title}"`, 3000, 'success');
     
     if (ui.currentView === 'home' || ui.currentView === 'search') {
       ui.navigateTo(ui.currentView, ui.currentParam);
@@ -735,16 +735,16 @@ class ZRApp {
           const success = storage.addTrackToPlaylist(plId, track.id);
           setTimeout(() => {
             hideAuthDetailsLoader();
-            ui.showToast(success ? "Added to playlist" : "Track already in playlist");
+            ui.showToast(success ? 'Added to playlist!' : 'Track already in this playlist', 3000, success ? 'success' : 'warning');
           }, 1200);
         } else if (action === 'context-remove-from-playlist') {
           const plId = item.getAttribute('data-playlist-id');
           storage.removeTrackFromPlaylist(plId, track.id);
           ui.renderPlaylist(plId);
-          ui.showToast("Removed from playlist");
+          ui.showToast('Removed from playlist', 3000, 'success');
         } else if (action === 'context-copy-link') {
           navigator.clipboard?.writeText(window.location.href);
-          ui.showToast("Link copied to clipboard");
+          ui.showToast('Link copied to clipboard!', 3000, 'success');
         }
         this.closeContextMenu();
       });

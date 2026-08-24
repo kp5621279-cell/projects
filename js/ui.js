@@ -1072,17 +1072,42 @@ class UIManager {
     if (modal) modal.classList.remove('hidden');
   }
 
-  showToast(message, duration = 3000) {
+  showToast(message, duration = 3500, type = 'info') {
     if (!this.toastContainer) return;
+
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    const titles = {
+      success: 'Success',
+      error: 'Error',
+      warning: 'Warning',
+      info: null
+    };
+
     const toast = document.createElement('div');
-    toast.className = 'ZR-toast fade-in';
-    toast.textContent = message;
+    toast.className = `ZR-toast toast-${type} fade-in`;
+    toast.innerHTML = `
+      <div class="toast-icon">${icons[type] || icons.info}</div>
+      <div class="toast-text">
+        ${titles[type] ? `<strong>${titles[type]}</strong>` : ''}
+        <span>${message}</span>
+      </div>
+      <button class="toast-close" aria-label="Close">✕</button>
+    `;
     this.toastContainer.appendChild(toast);
 
-    setTimeout(() => {
+    const dismiss = () => {
       toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, duration);
+      toast.style.transform = 'translateY(8px) scale(0.95)';
+      setTimeout(() => toast.remove(), 350);
+    };
+
+    toast.querySelector('.toast-close').addEventListener('click', dismiss);
+    setTimeout(dismiss, duration);
   }
 
   showAppUpdateModal() {

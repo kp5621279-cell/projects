@@ -78,22 +78,28 @@ function getUserFacingAuthError(message, fallback = 'Something went wrong. Pleas
   const lower = text.toLowerCase();
 
   if (lower.includes('rate limit') || lower.includes('too many requests')) {
-    return 'Too many sign-up attempts. Please wait a moment and try again.';
+    return { title: 'Too Many Attempts', msg: 'Too many sign-up attempts. Please wait a moment and try again.' };
   }
-  if (lower.includes('invalid-credential') || lower.includes('invalid login credentials') || lower.includes('wrong-password') || lower.includes('user-not-found')) {
-    return 'Incorrect email or password.';
+  if (lower.includes('invalid-credential') || lower.includes('invalid login credentials') || lower.includes('wrong-password') || lower.includes('user-not-found') || lower.includes('invalid-email')) {
+    return { title: 'Incorrect Credentials', msg: 'Email or password is incorrect. Please check and try again.' };
   }
   if (lower.includes('email-already-in-use') || lower.includes('user already registered') || lower.includes('already exists')) {
-    return 'An account with this email already exists.';
+    return { title: 'Account Already Exists', msg: 'An account with this email already exists. Please sign in instead.' };
   }
   if (lower.includes('email not confirmed') || lower.includes('confirm your email')) {
-    return 'Please confirm your email before signing in.';
+    return { title: 'Email Not Verified', msg: 'Please verify your email before signing in. Check your inbox.' };
   }
   if (lower.includes('weak-password') || lower.includes('password')) {
-    return 'Password must be at least 6 characters long.';
+    return { title: 'Weak Password', msg: 'Password must be at least 6 characters long.' };
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return { title: 'Network Error', msg: 'Could not connect. Check your internet and try again.' };
+  }
+  if (lower.includes('popup-closed')) {
+    return { title: 'Cancelled', msg: 'Sign-in was cancelled. Try again when ready.' };
   }
 
-  return text || fallback;
+  return { title: 'Error', msg: text || fallback };
 }
 
 export async function isUserSignedIn() {
@@ -205,9 +211,9 @@ export function setupAuth(ui) {
     try {
       await signOut(auth);
       toggleAccountMenu(false);
-      ui.showToast('Signed out successfully.');
+      ui.showToast('Signed out successfully.', 3000, 'success');
     } catch (error) {
-      ui.showToast(error.message);
+      ui.showToast(error.message, 4000, 'error');
     }
   });
 
@@ -225,11 +231,12 @@ export function setupAuth(ui) {
       await signInWithPopup(auth, provider);
       modal.classList.add('hidden');
       await waitForUserDetailsFetch();
-      ui.showToast('Signed in successfully.');
+      ui.showToast('Signed in with Google! Welcome.', 4000, 'success');
     } catch (error) {
       hideAuthDetailsLoader();
       if (error.code !== 'auth/popup-closed-by-user') {
-        ui.showToast(getUserFacingAuthError(error.message, 'Google sign-in failed.'));
+        const err = getUserFacingAuthError(error.message, 'Google sign-in failed.');
+        ui.showToast(err.msg, 4500, 'error');
       }
     }
   });
@@ -244,13 +251,13 @@ export function setupAuth(ui) {
     const password = passwordInput.value;
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      ui.showToast('Please enter a valid email address.');
+      ui.showToast('Please enter a valid email address.', 3500, 'warning');
       emailInput.focus();
       return;
     }
 
     if (password.length < 6) {
-      ui.showToast('Password must be at least 6 characters long.');
+      ui.showToast('Password must be at least 6 characters long.', 3500, 'warning');
       passwordInput.focus();
       return;
     }
@@ -263,15 +270,16 @@ export function setupAuth(ui) {
         await createUserWithEmailAndPassword(auth, email, password);
         modal.classList.add('hidden');
         await waitForUserDetailsFetch();
-        ui.showToast('Account created successfully.');
+        ui.showToast('Account created successfully! Welcome to ZR Beats.', 4000, 'success');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
         modal.classList.add('hidden');
         await waitForUserDetailsFetch();
-        ui.showToast('Signed in successfully.');
+        ui.showToast('Signed in successfully! Welcome back.', 4000, 'success');
       }
     } catch (error) {
-      ui.showToast(getUserFacingAuthError(error.message, 'Unable to complete authentication.'));
+      const err = getUserFacingAuthError(error.message, 'Unable to complete authentication.');
+      ui.showToast(err.msg, 4500, 'error');
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = mode === 'signup' ? 'Create account' : 'Sign In';
