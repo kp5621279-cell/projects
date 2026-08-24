@@ -1383,6 +1383,37 @@ html.mobile .main-content { padding-bottom: 150px !important; }
   .fc-title { font-size: 16px; }
 }
 
+/* Ensure bottom player framed on narrow viewports even without html.mobile */
+@media (max-width: 420px) {
+  .bottom-player-bar {
+    position: fixed !important;
+    bottom: 8px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: calc(100% - 16px) !important;
+    margin: 0 8px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.6) !important;
+    padding: 8px 12px !important;
+    z-index: 1400 !important;
+  }
+  .main-content { padding-bottom: 150px !important; }
+}
+
+@media (max-width: 360px) {
+  .bottom-player-bar {
+    position: fixed !important;
+    bottom: 6px !important;
+    left: 6px !important;
+    right: 6px !important;
+    width: calc(100% - 12px) !important;
+    border-radius: 10px !important;
+    padding: 6px 10px !important;
+    z-index: 1400 !important;
+  }
+  .main-content { padding-bottom: 140px !important; }
+}
+
 /* Device indicator styles */
 .device-indicator { color: var(--ZR-text-subdued); margin-left: 8px; }
 .device-indicator svg { opacity: 0.9; }
