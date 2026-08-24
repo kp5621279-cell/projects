@@ -1567,7 +1567,7 @@ input, textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 9999;
+  z-index: 99999;
   pointer-events: none;
   max-width: 420px;
   width: 90%;
