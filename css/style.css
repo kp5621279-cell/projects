@@ -1378,6 +1378,12 @@ input, textarea {
   align-items: center;
   gap: 20px;
 }
+
+.lottie-play-btn {
+  width: 48px;
+  height: 48px;
+  display: inline-block;
+}
 .btn-control-icon {
   color: var(--ZR-text-subdued);
   position: relative;

@@ -19,6 +19,7 @@ class UIManager {
     this.lyricsMode = false;
     this.rightSidebarMode = 'now-playing';
     this.isVisualizerOpen = false;
+    this.playPauseAnim = null;
   }
 
   init() {
@@ -1083,11 +1084,43 @@ class UIManager {
 
   updatePlayPauseIcon(isPlaying) {
     if (!this.playPauseBtn) return;
-    this.playPauseBtn.innerHTML = isPlaying ? `
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-    ` : `
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-    `;
+
+    // Use Lottie animation for play/pause if available
+    const containerId = 'lottie-play-btn';
+    const existing = document.getElementById(containerId);
+    if (!existing) {
+      this.playPauseBtn.innerHTML = `<div id="${containerId}" class="lottie-play-btn" aria-hidden="true"></div>`;
+    }
+
+    try {
+      if (!this.playPauseAnim && window.lottie && document.getElementById(containerId)) {
+        this.playPauseAnim = window.lottie.loadAnimation({
+          container: document.getElementById(containerId), // the dom element
+          renderer: 'svg',
+          loop: false,
+          autoplay: false,
+          path: 'https://lottie.host/3bfda1bf-a773-4a42-a5d6-892741a3454f/TbXRAwo4SG.json'
+        });
+        // Small safety: ensure animation is stopped initially
+        this.playPauseAnim.stop();
+      }
+
+      if (this.playPauseAnim) {
+        // If animation supports direction-based toggling, play forward for 'playing', reverse for 'paused'
+        this.playPauseAnim.setDirection(isPlaying ? 1 : -1);
+        this.playPauseAnim.play();
+        this.playPauseBtn.setAttribute('title', isPlaying ? 'Pause' : 'Play');
+        return;
+      }
+    } catch (err) {
+      console.warn('Play/pause Lottie failed', err);
+      // fallthrough to SVG fallback
+    }
+
+    // Fallback: inline SVG icons
+    const playSvg = `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    const pauseSvg = `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+    this.playPauseBtn.innerHTML = isPlaying ? pauseSvg : playSvg;
     this.playPauseBtn.setAttribute('title', isPlaying ? 'Pause' : 'Play');
   }
 
