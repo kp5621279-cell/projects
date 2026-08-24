@@ -403,28 +403,6 @@
   </script>
 
   <!-- Application Script -->
-  <script>
-    // Fallback: if app fails to initialize, hide splash after 6s so user can interact
-    (function() {
-      const FALLBACK_MS = 6000;
-      setTimeout(() => {
-        try {
-          const splash = document.getElementById('splash-screen');
-          if (splash && !splash.classList.contains('fade-out')) {
-            console.warn('ZR fallback: hiding splash after timeout');
-            splash.classList.add('fade-out');
-            setTimeout(() => { if (splash) splash.remove(); }, 700);
-          }
-          // Attempt to notify via UI toast if available
-          if (window.ui && typeof window.ui.showToast === 'function') {
-            window.ui.showToast('App took too long to load; fallback applied', 4500, 'warning');
-          }
-        } catch (e) {
-          console.warn('ZR fallback error:', e);
-        }
-      }, FALLBACK_MS);
-    })();
-  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
