@@ -1586,6 +1586,54 @@ html.mobile.force-desktop-ui .compact-track-row .btn-more-options {
   display: inline-flex !important;
 }
 
+/* Mobile tabs hamburger (three lines) to the right of back button */
+#mobile-tabs-btn, .mobile-tabs-btn {
+  display: none;
+}
+html.mobile .mobile-tabs-btn {
+  display: inline-flex !important;
+  margin-left: 6px;
+  width: 40px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.mobile-tabs-btn .mtb-line {
+  width: 18px;
+  height: 2px;
+  background: rgba(255,255,255,0.85);
+  display: block;
+  margin: 3px 0;
+  border-radius: 2px;
+}
+.mobile-tabs-menu {
+  position: absolute;
+  top: 52px;
+  left: 48px;
+  background: var(--ZR-elevated-base);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 1300;
+  min-width: 160px;
+}
+.mobile-tabs-menu.hidden { display: none; }
+.mobile-tab-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: transparent;
+  color: var(--ZR-text-base);
+  border: none;
+  font-size: 14px;
+}
+.mobile-tab-item:hover { background: rgba(255,255,255,0.03); }
+
 /* --- Artist View --- */
 .artist-banner {
   height: 180px; /* reduced for better layout */

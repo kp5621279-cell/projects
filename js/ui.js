@@ -30,6 +30,7 @@ class UIManager {
     this.detectAndApplyDevice();
     this.setupDeviceAutoRefresh();
     this.setupDeviceDropdown();
+    this.setupMobileTabs();
     this.setupMobileSearchToggle();
     this.setupDevHelper();
     this.setupVisualizerLoop();
@@ -330,6 +331,61 @@ class UIManager {
         });
       });
     }
+  }
+
+  setupMobileTabs() {
+    try {
+      const place = document.getElementById('btn-discover-back');
+      if (!place) return;
+      if (document.getElementById('mobile-tabs-btn')) return;
+
+      const btn = document.createElement('button');
+      btn.id = 'mobile-tabs-btn';
+      btn.className = 'mobile-tabs-btn hidden';
+      btn.setAttribute('aria-label', 'Open tabs');
+      btn.innerHTML = '<span class="mtb-line"></span><span class="mtb-line"></span><span class="mtb-line"></span>';
+      place.parentNode.insertBefore(btn, place.nextSibling);
+
+      const menu = document.createElement('div');
+      menu.id = 'mobile-tabs-menu';
+      menu.className = 'mobile-tabs-menu hidden';
+      const items = [
+        { label: 'Discover', view: 'home' },
+        { label: 'Playlists', view: 'playlists' },
+        { label: 'Categories', view: 'categories' }
+      ];
+      items.forEach(it => {
+        const el = document.createElement('button');
+        el.className = 'mobile-tab-item';
+        el.textContent = it.label;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.navigateTo(it.view);
+          menu.classList.add('hidden');
+        });
+        menu.appendChild(el);
+      });
+
+      place.parentNode.insertBefore(menu, btn.nextSibling);
+
+      const toggle = (e) => {
+        e && e.stopPropagation();
+        menu.classList.toggle('hidden');
+      };
+      btn.addEventListener('click', toggle);
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); toggle(e); });
+
+      // show button only in mobile mode
+      const observer = new MutationObserver(() => {
+        const isMobile = document.documentElement.classList.contains('mobile');
+        btn.classList.toggle('hidden', !isMobile);
+      });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+      document.addEventListener('click', (e) => {
+        if (!menu.contains(e.target) && e.target !== btn) menu.classList.add('hidden');
+      });
+    } catch (err) { console.warn('mobile tabs init failed', err); }
   }
 
   setupFeaturedCarousel() {
