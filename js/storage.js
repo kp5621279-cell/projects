@@ -515,13 +515,14 @@ class StorageManager {
   }
 
   async _deletePlaylistFromFirestore(playlistId) {
-    if (!this.currentUserId) return;
+    if (!this.currentUserId) return Promise.resolve();
     try {
       await deleteDoc(doc(this._userPlaylistsRef(), playlistId));
-      // Clean up delete tracking after Firestore confirms
-      setTimeout(() => this._localPlaylistDeletes.delete(playlistId), 3000);
+      // Clean up delete tracking ONLY after Firestore confirms successful delete
+      this._localPlaylistDeletes.delete(playlistId);
     } catch (err) {
       console.warn('Could not delete playlist from Firestore:', err);
+      throw err; // re-throw so caller can handle failure
     }
   }
 
@@ -641,8 +642,16 @@ class StorageManager {
     // Track as locally deleted so realtime listener doesn't re-add it
     this._localPlaylistDeletes.add(id);
     this._localPlaylistCreates.delete(id);
+    const deleted = this.userPlaylists.find(p => p.id === id);
     this.userPlaylists = this.userPlaylists.filter(p => p.id !== id);
-    this._deletePlaylistFromFirestore(id);
+    // Persist to Firestore — if it fails, restore the playlist in-memory
+    this._deletePlaylistFromFirestore(id).catch((err) => {
+      console.warn('Firestore delete failed, restoring playlist in-memory:', err);
+      if (deleted) {
+        this.userPlaylists.push(deleted);
+        this._localPlaylistDeletes.delete(id);
+      }
+    });
   }
 
   addTrackToPlaylist(playlistId, trackId) {
