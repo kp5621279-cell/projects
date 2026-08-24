@@ -438,6 +438,20 @@ input, textarea {
   cursor: not-allowed;
 }
 
+.btn-discover-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--ZR-text-base);
+  border-radius: 6px;
+  padding: 6px 8px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.btn-discover-back:hover {
+  background: rgba(255,255,255,0.04);
+}
+
 /* Top Search Bar */
 .topbar-search-box {
   position: relative;

@@ -26,6 +26,7 @@ class UIManager {
     this.setupPlayerListeners();
     this.renderSidebarPlaylists();
     this.navigateTo('home');
+    if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
     this.setupVisualizerLoop();
   }
 
@@ -62,6 +63,7 @@ class UIManager {
     // Context menu & toasts
     this.contextMenu = document.getElementById('context-menu');
     this.toastContainer = document.getElementById('toast-container');
+    this.btnDiscoverBack = document.getElementById('btn-discover-back');
   }
 
   setupPlayerListeners() {
@@ -199,6 +201,14 @@ class UIManager {
     const btnForward = document.getElementById('btn-history-forward');
     if (btnBack) btnBack.disabled = this.historyIndex <= 0;
     if (btnForward) btnForward.disabled = this.historyIndex >= this.viewHistory.length - 1;
+
+    // Show an automatic "Back to Discover" button when previous view was 'home' (Discover)
+    if (this.btnDiscoverBack) {
+      const prevEntry = this.viewHistory[this.historyIndex - 1];
+      const prevView = prevEntry ? prevEntry.split(':')[0] : null;
+      const shouldShow = (prevView === 'home' || prevView === 'discovered') && this.currentView !== 'home';
+      this.btnDiscoverBack.style.display = shouldShow ? 'inline-flex' : 'none';
+    }
   }
 
   updateActiveNavPills() {
