@@ -1547,6 +1547,44 @@ html.mobile .main-view-wrapper::-webkit-scrollbar-thumb { background: rgba(255,2
   font-size: 13px;
 }
 .device-dropdown .device-option:hover { background: rgba(255,255,255,0.03); }
+.device-dropdown .device-option:hover { background: rgba(255,255,255,0.03); }
+
+/* When user forces Desktop while browser reports mobile, make UI desktop-like */
+html.mobile.force-desktop-ui .left-sidebar,
+html.mobile.force-desktop-ui .right-sidebar {
+  display: block !important;
+}
+html.mobile.force-desktop-ui .ZR-desktop-app {
+  display: grid !important;
+  grid-template-columns: var(--sidebar-width) 1fr var(--right-sidebar-width) !important;
+  grid-template-rows: 1fr var(--player-height) !important;
+  grid-template-areas: "sidebar main right" "player player player" !important;
+  padding: 8px !important;
+  height: 100dvh !important;
+}
+html.mobile.force-desktop-ui .main-view-wrapper {
+  height: calc(100dvh - var(--player-height) - 16px) !important;
+}
+html.mobile.force-desktop-ui .bottom-player-bar {
+  position: fixed !important;
+  bottom: 8px !important;
+  left: 8px !important;
+  right: 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 12px !important;
+  height: var(--player-height) !important;
+  padding: 0 16px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
+  z-index: 1400 !important;
+}
+/* ensure playlist/track action buttons are visible when forcing desktop UI */
+html.mobile.force-desktop-ui .track-row .btn-more-options,
+html.mobile.force-desktop-ui .track-row .btn-like-icon,
+html.mobile.force-desktop-ui .playlist-row .btn-more-options,
+html.mobile.force-desktop-ui .compact-track-row .btn-more-options {
+  opacity: 1 !important;
+  display: inline-flex !important;
+}
 
 /* --- Artist View --- */
 .artist-banner {

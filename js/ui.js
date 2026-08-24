@@ -217,6 +217,11 @@ class UIManager {
       let isMobile = /Mobi|Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile) || widthMobile || coarsePointer;
       if (saved === 'mobile') isMobile = true;
       if (saved === 'desktop') isMobile = false;
+      // expose a class when the user forced desktop via localStorage
+      try {
+        if (saved === 'desktop') document.documentElement.classList.add('force-desktop-ui');
+        else document.documentElement.classList.remove('force-desktop-ui');
+      } catch (e) {}
       document.documentElement.classList.toggle('mobile', !!isMobile);
       document.documentElement.classList.toggle('desktop', !isMobile);
 
@@ -395,6 +400,8 @@ class UIManager {
 
   setupDevHelper() {
     try {
+      // Only show dev helper when explicitly requested via ?dev=1
+      if (!/([?&])dev=1(\b|$)/.test(location.search)) return;
       // remove existing if any
       const existing = document.getElementById('dev-device-helper');
       if (existing) existing.remove();
