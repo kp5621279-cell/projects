@@ -1245,7 +1245,16 @@ html.mobile .player-track-artist { font-size: 11px; }
 
 /* Further mobile refinements to mimic native app feel */
 html.mobile .brand-name { display: none !important; }
-html.mobile .aesthetic-nav { display: none !important; }
+/* Show a compact, scrollable nav on mobile so tabs remain visible */
+html.mobile .aesthetic-nav {
+  display: flex !important;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  align-items: center;
+  padding-left: 6px;
+}
+html.mobile .aesthetic-nav .nav-link { padding: 6px 8px; font-size: 13px; white-space: nowrap; }
 html.mobile .topbar { height: 52px; align-items: center; padding: 6px 10px; }
 html.mobile .topbar-left { gap: 8px; }
 html.mobile .brand-logo .zr-logo-svg { width: 32px; height: 32px; }
@@ -1319,6 +1328,16 @@ html.mobile .main-content { padding-bottom: 120px !important; }
 .mobile-search-btn { width: 36px; height: 36px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); margin-right: 8px; border: 0; color: var(--ZR-text-subdued); }
 .mobile-search-btn svg { pointer-events: none; }
 html.mobile .mobile-search-btn { display: inline-flex !important; }
+.mobile-search-btn { touch-action: manipulation; z-index: 1300; }
+
+/* Disable moving/large dynamic header on mobile to keep content in frame */
+html.mobile .dynamic-header-bg { display: none !important; }
+
+/* Make topbar sticky on mobile so search and tabs remain accessible */
+html.mobile .topbar { position: sticky; top: 0; left: 0; right: 0; z-index: 1200; background: rgba(18,18,18,0.85); }
+
+/* Ensure main content doesn't get hidden behind sticky topbar */
+html.mobile .main-view-wrapper { padding-top: 64px !important; }
 .topbar-search-box.search-open .topbar-search-input { display: block !important; }
 @media (max-width: 1024px) {
   .topbar-search-box .topbar-search-input { display: none; }
