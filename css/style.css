@@ -1343,6 +1343,30 @@ html.mobile .main-view-wrapper { padding-top: 64px !important; }
   .topbar-search-box .topbar-search-input { display: none; }
 }
 
+/* Extra-tight mobile adjustments for common Android widths (<=420px & <=360px) */
+@media (max-width: 420px) {
+  html.mobile .featured-carousel { height: 180px; }
+  html.mobile .topbar { height: 52px; padding: 6px 8px; }
+  html.mobile .topbar-left { gap: 6px; }
+  html.mobile .brand-logo .zr-logo-svg { width: 28px; height: 28px; }
+  html.mobile .topbar-search-box { margin-left: 6px; }
+  html.mobile .topbar-search-input { padding: 6px 30px 6px 34px !important; font-size: 13px; }
+  html.mobile .aesthetic-nav .nav-link { font-size: 12px; padding: 6px 6px; }
+  .mobile-search-btn { width: 40px; height: 40px; }
+  html.mobile .player-thumb-wrap { width: 40px; height: 40px; }
+  html.mobile .bottom-player-bar { height: 72px !important; }
+  html.mobile .main-content { padding-bottom: 110px !important; }
+}
+
+@media (max-width: 360px) {
+  html.mobile .featured-carousel { height: 150px; }
+  html.mobile .topbar { height: 50px; }
+  html.mobile .brand-logo .zr-logo-svg { width: 26px; height: 26px; }
+  html.mobile .topbar-search-input { font-size: 12px; padding: 6px 26px 6px 30px !important; }
+  html.mobile .aesthetic-nav .nav-link { font-size: 11px; padding: 6px 6px; }
+  .fc-title { font-size: 16px; }
+}
+
 /* Device indicator styles */
 .device-indicator { color: var(--ZR-text-subdued); margin-left: 8px; }
 .device-indicator svg { opacity: 0.9; }
