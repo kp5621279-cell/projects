@@ -952,10 +952,11 @@ class UIManager {
     const playsFormatted = track.plays || "1,245,119";
 
     return `
-      <tr class="track-row ${isCurrentTrack ? 'active-playing-row' : ''}" 
+        <tr class="track-row ${isCurrentTrack ? 'active-playing-row' : ''} ${isCurrentTrack && player.isPlaying ? 'show-hint' : ''}" 
           data-track-id="${track.id}" 
           data-action="play-track-in-context" 
           data-playlist-id="${playlistId || ''}"
+          title="Right click for more options"
           oncontextmenu="window.ZRApp.openContextMenu(event, '${track.id}', '${playlistId || ''}')">
         
         <td class="col-num text-center">
@@ -978,6 +979,7 @@ class UIManager {
               <span class="track-cell-name truncate ${isCurrentTrack ? 'text-ZR-green font-semibold' : ''}">${track.title}</span>
               <span class="track-cell-artist truncate cursor-pointer hover:underline" data-action="open-artist" data-id="${track.artistId || track.artist}">${track.artist}</span>
             </div>
+            <span class="track-hover-hint">Right click for more options</span>
           </div>
         </td>
 
@@ -1009,16 +1011,18 @@ class UIManager {
     const isLiked = storage.isLiked(track.id);
 
     return `
-      <div class="compact-track-row ${isCurrent ? 'active' : ''}" 
-           data-track-id="${track.id}" 
-           data-action="play-track" 
-           data-id="${track.id}"
-           oncontextmenu="window.ZRApp.openContextMenu(event, '${track.id}')">
+       <div class="compact-track-row ${isCurrent ? 'active' : ''}" 
+         data-track-id="${track.id}" 
+         data-action="play-track" 
+         data-id="${track.id}"
+         title="Right click for more options"
+         oncontextmenu="window.ZRApp.openContextMenu(event, '${track.id}')">
         <img src="${track.cover}" class="compact-thumb" alt="${track.title}" />
         <div class="compact-meta">
           <span class="compact-title truncate ${isCurrent ? 'text-ZR-green' : ''}">${track.title}</span>
           <span class="compact-artist truncate">${track.artist}</span>
         </div>
+        <span class="track-hover-hint compact-hint">Right click for more options</span>
         <button class="btn-like-icon ${isLiked ? 'liked' : ''} ml-auto mr-2" data-action="toggle-like" data-id="${track.id}" title="${isLiked ? 'Remove from Liked' : 'Save to Liked'}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         </button>
