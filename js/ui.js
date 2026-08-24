@@ -202,11 +202,9 @@ class UIManager {
     if (btnBack) btnBack.disabled = this.historyIndex <= 0;
     if (btnForward) btnForward.disabled = this.historyIndex >= this.viewHistory.length - 1;
 
-    // Show an automatic "Back to Discover" button when previous view was 'home' (Discover)
+    // Show an automatic back button when there is any history (not on first view)
     if (this.btnDiscoverBack) {
-      const prevEntry = this.viewHistory[this.historyIndex - 1];
-      const prevView = prevEntry ? prevEntry.split(':')[0] : null;
-      const shouldShow = (prevView === 'home' || prevView === 'discovered') && this.currentView !== 'home';
+      const shouldShow = this.historyIndex > 0 && this.currentView !== 'home';
       this.btnDiscoverBack.style.display = shouldShow ? 'inline-flex' : 'none';
     }
   }
