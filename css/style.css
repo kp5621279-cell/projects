@@ -1601,6 +1601,18 @@ html.mobile .mobile-tabs-btn {
   border: none;
   cursor: pointer;
 }
+/* Also enable on Android UA when html.android is present */
+html.android .mobile-tabs-btn {
+  display: inline-flex !important;
+  margin-left: 6px;
+  width: 40px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
 .mobile-tabs-btn .mtb-line {
   width: 12px;
   height: 2px;
@@ -1635,7 +1647,8 @@ html.mobile .mobile-tabs-btn {
 .mobile-tabs-btn.hidden { display: none !important; }
 
 /* Ensure bottom player is fixed and framed on mobile screens (non-forced desktop) */
-html.mobile:not(.force-desktop-ui) .bottom-player-bar {
+html.mobile:not(.force-desktop-ui) .bottom-player-bar,
+html.android:not(.force-desktop-ui) .bottom-player-bar {
   position: fixed !important;
   left: 8px !important;
   right: 8px !important;
@@ -1648,7 +1661,8 @@ html.mobile:not(.force-desktop-ui) .bottom-player-bar {
 }
 
 /* Center controls in the mini player on mobile (mini layout) */
-html.mobile:not(.force-desktop-ui) .player-center {
+html.mobile:not(.force-desktop-ui) .player-center,
+html.android:not(.force-desktop-ui) .player-center {
   display: flex;
   flex-direction: row !important;
   justify-content: center;
@@ -1657,7 +1671,8 @@ html.mobile:not(.force-desktop-ui) .player-center {
 }
 
 /* Hide long timeline in mini player to keep controls vertically centered */
-html.mobile:not(.force-desktop-ui) .player-timeline-wrapper { display: none !important; }
+html.mobile:not(.force-desktop-ui) .player-timeline-wrapper,
+html.android:not(.force-desktop-ui) .player-timeline-wrapper { display: none !important; }
 
 /* Ensure player buttons are above other elements */
 html.mobile .bottom-player-bar .btn-main-play-pause { z-index: 1460; }
