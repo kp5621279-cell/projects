@@ -320,8 +320,17 @@ class ZRApp {
           const title = actionEl.getAttribute('data-title') || '';
           let idLabel = '';
           if (id) {
-            // Hide technical prefixes like 'itunes-' from user-facing debug messages
-            idLabel = id.replace(/^itunes-/, '');
+            // Prefer human-friendly track title when available
+            try {
+              const track = storage.getTrackById(id);
+              if (track && track.title) {
+                idLabel = track.title;
+              } else {
+                idLabel = id.replace(/^itunes-/, '');
+              }
+            } catch (e) {
+              idLabel = id.replace(/^itunes-/, '');
+            }
           }
           ui.showToast(`${action}${title ? ': ' + title : idLabel ? ': ' + idLabel : ''}`, 1200, 'info');
         }
