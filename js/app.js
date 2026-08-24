@@ -313,6 +313,16 @@ class ZRApp {
       const action = actionEl.getAttribute('data-action');
       const id = actionEl.getAttribute('data-id');
       console.debug('[app] click action:', action, 'id:', id, 'el:', actionEl);
+      // Show a small visual toast for key navigation actions to aid debugging
+      try {
+        const debugActions = ['filter-category', 'open-artist', 'play-artist-all', 'open-playlist', 'play-playlist', 'play-track', 'play-liked'];
+        if (debugActions.includes(action) && ui && typeof ui.showToast === 'function') {
+          const title = actionEl.getAttribute('data-title') || '';
+          ui.showToast(`${action}${title ? ': ' + title : id ? ': ' + id : ''}`, 1200, 'info');
+        }
+      } catch (e) {
+        console.warn('[app] debug toast failed', e);
+      }
 
       switch (action) {
         case 'open-playlist':
