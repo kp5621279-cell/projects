@@ -12,6 +12,7 @@ import {
   reauthenticateWithCredential, EmailAuthProvider
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 import { storage, auth } from './storage.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js';
 
 const AUTH_DETAILS_LOTTIE_URL = 'https://lottie.host/59c8ffb0-475e-4ded-8b67-daf0b4e419c9/v7ZGjorg5f.json';
 
@@ -186,8 +187,13 @@ export function setupAuth(ui) {
         <form id="edit-profile-form">
           <div class="profile-pic-section">
             <img id="profile-pic-preview" src="" class="profile-pic-preview" alt="Profile" />
+            <label class="profile-pic-upload-btn" for="profile-pic-file">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+              Choose Photo
+            </label>
+            <input type="file" id="profile-pic-file" accept="image/*" style="display:none;" />
           </div>
-          <label class="edit-profile-label">Profile Picture URL
+          <label class="edit-profile-label">Or paste Image URL
             <input id="profile-pic-input" type="url" class="edit-profile-input" placeholder="https://example.com/photo.jpg" />
           </label>
           <label class="edit-profile-label">Display Name
@@ -356,6 +362,62 @@ export function setupAuth(ui) {
       _epPreview.src = _epPicInput.value.trim() || _epDefaultAvatar;
     });
     _epPreview.addEventListener('error', () => { _epPreview.src = _epDefaultAvatar; });
+  }
+
+  function _resizeImage(file, maxW, maxH) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > maxW) { h *= maxW / w; w = maxW; } }
+          else { if (h > maxH) { w *= maxH / h; h = maxH; } }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const _epFileInput = document.getElementById('profile-pic-file');
+  if (_epFileInput) {
+    _epFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { ui.showToast('Please select an image file.', 3000, 'warning'); return; }
+      if (file.size > 5 * 1024 * 1024) { ui.showToast('Image must be under 5MB.', 3000, 'warning'); return; }
+      const uploadBtn = document.querySelector('.profile-pic-upload-btn');
+      if (uploadBtn) { uploadBtn.textContent = 'Uploading...'; uploadBtn.style.pointerEvents = 'none'; }
+      try {
+        const resizedDataURL = await _resizeImage(file, 200, 200);
+        let downloadURL = null;
+        try {
+          const storageRef = ref(getStorage(), `profile-pics/${auth.currentUser.uid}/${Date.now()}-${file.name}`);
+          const blob = await fetch(resizedDataURL).then(r => r.blob());
+          await uploadBytes(storageRef, blob);
+          downloadURL = await getDownloadURL(storageRef);
+        } catch (storageErr) {
+          console.warn('Storage upload failed, using base64:', storageErr);
+          downloadURL = resizedDataURL;
+        }
+        document.getElementById('profile-pic-preview').src = downloadURL;
+        document.getElementById('profile-pic-input').value = downloadURL;
+        ui.showToast('Profile picture updated!', 3000, 'success');
+      } catch (err) {
+        console.warn('Image processing failed:', err);
+        ui.showToast('Failed to process image. Try again.', 4000, 'error');
+      } finally {
+        if (uploadBtn) { uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg> Choose Photo'; uploadBtn.style.pointerEvents = ''; }
+        _epFileInput.value = '';
+      }
+    });
   }
 
   const _reauthCheck = () => {

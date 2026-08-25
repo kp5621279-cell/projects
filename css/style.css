@@ -2805,8 +2805,15 @@ body {
 .account-menu-item:hover { background: rgba(255,255,255,.04); }
 .account-menu-divider { height: 1px; background: rgba(255,230,210,.12); margin: 2px 0; }
 .edit-profile-card { width: min(100%, 440px); max-height: 85vh; overflow-y: auto; }
-.profile-pic-section { display: flex; justify-content: center; margin-bottom: 8px; }
+.profile-pic-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 8px; }
 .profile-pic-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,218,190,.3); }
+.profile-pic-upload-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,.08);
+  color: #e9d8ca; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .2s; margin-top: 8px;
+}
+.profile-pic-upload-btn:hover { background: rgba(255,255,255,.14); }
 #edit-profile-form { display: grid; gap: 13px; }
 #edit-profile-form label { display: grid; gap: 6px; color: #e9d8ca; font-size: 12px; font-weight: 600; }
 #edit-profile-form input {
