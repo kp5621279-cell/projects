@@ -191,11 +191,10 @@ export function setupAuth(ui) {
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
               Choose Photo
             </label>
+            <small class="profile-pic-hint">PNG, JPG, WEBP up to 5MB</small>
             <input type="file" id="profile-pic-file" accept="image/*" style="display:none;" />
+            <input id="profile-pic-input" type="hidden" value="" />
           </div>
-          <label class="edit-profile-label">Or paste Image URL
-            <input id="profile-pic-input" type="url" class="edit-profile-input" placeholder="https://example.com/photo.jpg" />
-          </label>
           <label class="edit-profile-label">Display Name
             <input id="profile-name-input" type="text" class="edit-profile-input" placeholder="Your name" />
           </label>
@@ -357,11 +356,13 @@ export function setupAuth(ui) {
   const _epDefaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
   const _epPreview = document.getElementById('profile-pic-preview');
   const _epPicInput = document.getElementById('profile-pic-input');
+  if (_epPreview) {
+    _epPreview.addEventListener('error', () => { _epPreview.src = _epDefaultAvatar; });
+  }
   if (_epPicInput && _epPreview) {
     _epPicInput.addEventListener('input', () => {
       _epPreview.src = _epPicInput.value.trim() || _epDefaultAvatar;
     });
-    _epPreview.addEventListener('error', () => { _epPreview.src = _epDefaultAvatar; });
   }
 
   function _resizeImage(file, maxW, maxH) {
@@ -466,7 +467,8 @@ export function setupAuth(ui) {
     const user = auth.currentUser;
     if (!user) return;
     const saveBtn = document.getElementById('profile-save-btn');
-    const newPhotoURL = document.getElementById('profile-pic-input').value.trim() || null;
+    const newPhotoInput = document.getElementById('profile-pic-input');
+    const newPhotoURL = newPhotoInput ? newPhotoInput.value.trim() : '';
     const newName = document.getElementById('profile-name-input').value.trim();
     const newEmail = document.getElementById('profile-email-input').value.trim();
     const newPassword = document.getElementById('profile-password-input').value;
@@ -474,6 +476,7 @@ export function setupAuth(ui) {
     const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
     const emailChanged = !isGoogle && newEmail !== user.email;
     const passwordChanged = !isGoogle && newPassword.length > 0;
+    const finalPhotoURL = newPhotoURL || user.photoURL || null;
 
     if (!newName) { ui.showToast('Display name cannot be empty.', 3000, 'warning'); document.getElementById('profile-name-input').focus(); return; }
     if ((emailChanged || passwordChanged) && !currentPassword) { ui.showToast('Current password is required for email/password changes.', 4000, 'warning'); document.getElementById('profile-current-password').focus(); return; }
@@ -487,7 +490,7 @@ export function setupAuth(ui) {
         const credential = EmailAuthProvider.credential(user.email, currentPassword);
         await reauthenticateWithCredential(user, credential);
       }
-      await updateProfile(user, { displayName: newName, photoURL: newPhotoURL });
+      await updateProfile(user, { displayName: newName, photoURL: finalPhotoURL });
       if (emailChanged) await updateEmail(user, newEmail);
       if (passwordChanged) await updatePassword(user, newPassword);
       syncAuthUI(auth.currentUser);
