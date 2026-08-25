@@ -106,6 +106,8 @@ function getUserFacingAuthError(message, fallback = 'Something went wrong. Pleas
   return { title: 'Error', msg: text || fallback };
 }
 
+import { rewardsManager } from './rewards.js';
+
 export async function isUserSignedIn() {
   return !!auth.currentUser;
 }
@@ -117,6 +119,8 @@ export function setupAuth(ui) {
 
   const syncAuthUI = (user) => {
     const isSignedIn = !!user;
+    rewardsManager.setUserId(user ? user.uid : 'guest');
+
     if (getStartedButton) {
       getStartedButton.style.display = isSignedIn ? 'none' : '';
     }
@@ -133,7 +137,9 @@ export function setupAuth(ui) {
       const finalAvatar = localPic || user.photoURL || _defaultAvatar;
 
       signInButton.innerHTML = `
-        <img class="btn-sign-in-avatar" src="${finalAvatar}" alt="${buttonLabel}" />
+        <div class="topbar-avatar-badge-wrap">
+          <img class="btn-sign-in-avatar" src="${finalAvatar}" alt="${buttonLabel}" />
+        </div>
         <span class="btn-sign-in-name truncate">${buttonLabel}</span>
       `;
       signInButton.title = 'Account';
@@ -143,6 +149,9 @@ export function setupAuth(ui) {
       if (_avatarImg) _avatarImg.src = finalAvatar;
       const avatarWrapper = document.querySelector('.user-avatar-btn');
       if (avatarWrapper) avatarWrapper.style.display = 'none';
+
+      // Update corner badge on the avatar wrap
+      setTimeout(() => rewardsManager.updateTopbarBadge(), 10);
     } else {
       signInButton.innerHTML = 'Sign In';
       signInButton.title = 'Sign in';
@@ -157,6 +166,7 @@ export function setupAuth(ui) {
   document.body.insertAdjacentHTML('beforeend', `
     <div class="account-menu hidden" id="account-menu" role="menu" aria-label="Account menu">
       <button type="button" id="edit-profile-btn" class="account-menu-item account-menu-item-top">✏️ Edit Profile</button>
+      <button type="button" id="rewards-stats-btn" class="account-menu-item">🏆 Rewards & Stats</button>
       <div class="account-menu-divider"></div>
       <button type="button" id="logout-account-btn" class="account-menu-item">Log out</button>
     </div>
@@ -556,6 +566,10 @@ export function setupAuth(ui) {
   document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
     toggleAccountMenu(false);
     _openEditProfile();
+  });
+  document.getElementById('rewards-stats-btn')?.addEventListener('click', () => {
+    toggleAccountMenu(false);
+    rewardsManager.openRewardsModal();
   });
   document.getElementById('edit-profile-form')?.addEventListener('submit', (e) => { e.preventDefault(); _saveProfile(); });
   document.querySelector('.edit-profile-close')?.addEventListener('click', () => { document.getElementById('edit-profile-modal').classList.add('hidden'); });

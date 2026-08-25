@@ -5,6 +5,7 @@
  */
 
 import { storage } from './storage.js';
+import { rewardsManager } from './rewards.js';
 
 class AudioEngine {
   constructor() {
@@ -403,6 +404,10 @@ class AudioEngine {
   }
 
   handleTrackEnded() {
+    if (this.currentTrack) {
+      rewardsManager.recordSongPlay(this.currentTrack.id);
+    }
+
     if (this.repeatMode === 'one') {
       this.seek(0);
       this.play();

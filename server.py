@@ -14,6 +14,27 @@ import json
 PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
+# Ensure assets/badges exists and copy badges
+try:
+    badges_dir = os.path.join(DIRECTORY, 'assets', 'badges')
+    os.makedirs(badges_dir, exist_ok=True)
+    uploads_dir = r"C:\Users\Krishx `11\.gemini\antigravity\brain\ed4243a4-195a-403b-9e42-846c812230c4\.user_uploaded"
+    badge_map = {
+        'media_1787639454181.png': 'badge-yellow.png',
+        'media_1787639454180.png': 'badge-cyan.png',
+        'media_1787639454173.png': 'badge-red.png',
+        'media_1787639454177.png': 'badge-green.png'
+    }
+    if os.path.exists(uploads_dir):
+        import shutil
+        for src, dest in badge_map.items():
+            s_path = os.path.join(uploads_dir, src)
+            d_path = os.path.join(badges_dir, dest)
+            if os.path.exists(s_path) and not os.path.exists(d_path):
+                shutil.copyfile(s_path, d_path)
+except Exception as e:
+    pass
+
 class CustomHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)

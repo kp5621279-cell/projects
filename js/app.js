@@ -8,6 +8,7 @@ import { storage } from './storage.js';
 import { player } from './audioPlayer.js';
 import { ui } from './ui.js';
 import { setupAuth, isUserSignedIn, showAuthDetailsLoader, hideAuthDetailsLoader } from './auth.js';
+import { rewardsManager } from './rewards.js';
 
 class ZRApp {
   constructor() {
@@ -36,7 +37,10 @@ class ZRApp {
     window.__ZR_VERSION_STATUS__ = this.versionStatus;
 
     // Hide splash after a short delay (data loaded)
-    setTimeout(() => this.hideSplash(), 1200);
+    setTimeout(() => {
+      this.hideSplash();
+      rewardsManager.updateTopbarBadge();
+    }, 1200);
 
     window.ZRApp = this;
   }

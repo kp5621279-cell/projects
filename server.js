@@ -25,6 +25,32 @@ const MIME_TYPES = {
   '.flac': 'audio/flac'
 };
 
+// Ensure assets/badges directory exists & copy user uploaded badges if found
+try {
+  const badgesDir = path.join(BASE_DIR, 'assets', 'badges');
+  if (!fs.existsSync(badgesDir)) fs.mkdirSync(badgesDir, { recursive: true });
+
+  const uploadsDir = 'C:\\Users\\Krishx `11\\.gemini\\antigravity\\brain\\ed4243a4-195a-403b-9e42-846c812230c4\\.user_uploaded';
+  const badgeMap = {
+    'media_1787639454181.png': 'badge-yellow.png',
+    'media_1787639454180.png': 'badge-cyan.png',
+    'media_1787639454173.png': 'badge-red.png',
+    'media_1787639454177.png': 'badge-green.png'
+  };
+
+  if (fs.existsSync(uploadsDir)) {
+    for (const [src, dest] of Object.entries(badgeMap)) {
+      const srcPath = path.join(uploadsDir, src);
+      const destPath = path.join(badgesDir, dest);
+      if (fs.existsSync(srcPath) && !fs.existsSync(destPath)) {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
+  }
+} catch (e) {
+  console.warn('Badge assets setup notice:', e.message);
+}
+
 const server = http.createServer((req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
