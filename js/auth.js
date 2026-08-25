@@ -398,18 +398,9 @@ export function setupAuth(ui) {
       if (uploadBtn) { uploadBtn.textContent = 'Uploading...'; uploadBtn.style.pointerEvents = 'none'; }
       try {
         const resizedDataURL = await _resizeImage(file, 200, 200);
-        let downloadURL = null;
-        try {
-          const storageRef = ref(getStorage(), `profile-pics/${auth.currentUser.uid}/${Date.now()}-${file.name}`);
-          const blob = await fetch(resizedDataURL).then(r => r.blob());
-          await uploadBytes(storageRef, blob);
-          downloadURL = await getDownloadURL(storageRef);
-        } catch (storageErr) {
-          console.warn('Storage upload failed, using base64:', storageErr);
-          downloadURL = resizedDataURL;
-        }
-        document.getElementById('profile-pic-preview').src = downloadURL;
-        document.getElementById('profile-pic-input').value = downloadURL;
+        const finalUrl = resizedDataURL;
+        document.getElementById('profile-pic-preview').src = finalUrl;
+        document.getElementById('profile-pic-input').value = finalUrl;
         ui.showToast('Profile picture updated!', 3000, 'success');
       } catch (err) {
         console.warn('Image processing failed:', err);
@@ -424,8 +415,6 @@ export function setupAuth(ui) {
   const _reauthCheck = () => {
     const user = auth.currentUser;
     if (!user) return;
-    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-    if (isGoogle) return;
     const eInput = document.getElementById('profile-email-input');
     const pInput = document.getElementById('profile-password-input');
     if (!eInput || !pInput) return;
@@ -455,10 +444,14 @@ export function setupAuth(ui) {
     passwordInput.value = '';
     currentPasswordInput.value = '';
 
-    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-    document.getElementById('profile-email-section').style.display = isGoogle ? 'none' : '';
-    document.getElementById('profile-password-section').style.display = isGoogle ? 'none' : '';
+    document.getElementById('profile-email-section').style.display = '';
+    document.getElementById('profile-password-section').style.display = '';
     document.getElementById('profile-reauth-section').style.display = 'none';
+
+    const passwordField = document.getElementById('profile-password-input');
+    if (passwordField) {
+      passwordField.setAttribute('placeholder', 'Enter new password');
+    }
 
     modal.classList.remove('hidden');
   }
@@ -473,9 +466,8 @@ export function setupAuth(ui) {
     const newEmail = document.getElementById('profile-email-input').value.trim();
     const newPassword = document.getElementById('profile-password-input').value;
     const currentPassword = document.getElementById('profile-current-password').value;
-    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-    const emailChanged = !isGoogle && newEmail !== user.email;
-    const passwordChanged = !isGoogle && newPassword.length > 0;
+    const emailChanged = newEmail !== user.email;
+    const passwordChanged = newPassword.length > 0;
     const finalPhotoURL = newPhotoURL || user.photoURL || null;
 
     if (!newName) { ui.showToast('Display name cannot be empty.', 3000, 'warning'); document.getElementById('profile-name-input').focus(); return; }
