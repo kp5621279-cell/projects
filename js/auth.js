@@ -7,7 +7,9 @@ import {
   signInWithPopup, GoogleAuthProvider,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged,
+  updateProfile, updateEmail, updatePassword,
+  reauthenticateWithCredential, EmailAuthProvider
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 import { storage, auth } from './storage.js';
 
@@ -118,6 +120,9 @@ export function setupAuth(ui) {
       getStartedButton.style.display = isSignedIn ? 'none' : '';
     }
 
+    const _defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
+    const _avatarImg = document.querySelector('.user-avatar-img');
+
     if (isSignedIn) {
       const displayName = user.displayName || user.email || 'Account';
       const buttonLabel = displayName.includes('@') ? displayName.split('@')[0].trim() : displayName.trim() || 'Account';
@@ -125,16 +130,20 @@ export function setupAuth(ui) {
       signInButton.title = 'Account';
       signInButton.classList.add('signed-in');
       signInButton.setAttribute('aria-expanded', 'false');
+      if (_avatarImg) _avatarImg.src = user.photoURL || _defaultAvatar;
     } else {
       signInButton.textContent = 'Sign In';
       signInButton.title = 'Sign in';
       signInButton.classList.remove('signed-in');
       signInButton.setAttribute('aria-expanded', 'false');
+      if (_avatarImg) _avatarImg.src = _defaultAvatar;
     }
   };
 
   document.body.insertAdjacentHTML('beforeend', `
     <div class="account-menu hidden" id="account-menu" role="menu" aria-label="Account menu">
+      <button type="button" id="edit-profile-btn" class="account-menu-item account-menu-item-top">✏️ Edit Profile</button>
+      <div class="account-menu-divider"></div>
       <button type="button" id="logout-account-btn" class="account-menu-item">Log out</button>
     </div>
     <div class="auth-overlay hidden" id="auth-modal">
@@ -166,6 +175,41 @@ export function setupAuth(ui) {
         </form>
         <p class="auth-note" style="font-size:11px;color:#999;text-align:center;margin:12px 0 0;line-height:1.5;"> Didn't receive the email? Check your <strong>Spam/Junk</strong> folder. </p>
         <p class="auth-switch"><button id="reset-back-btn" type="button">← Back to Sign In</button></p>
+      </div>
+    </div>
+    <div class="auth-overlay hidden" id="edit-profile-modal">
+      <div class="auth-card edit-profile-card">
+        <button class="auth-close edit-profile-close" type="button" aria-label="Close">×</button>
+        <p class="auth-eyebrow">ZR BEATS</p>
+        <h2>Edit Profile</h2>
+        <p class="auth-copy">Update your profile information.</p>
+        <form id="edit-profile-form">
+          <div class="profile-pic-section">
+            <img id="profile-pic-preview" src="" class="profile-pic-preview" alt="Profile" />
+          </div>
+          <label class="edit-profile-label">Profile Picture URL
+            <input id="profile-pic-input" type="url" class="edit-profile-input" placeholder="https://example.com/photo.jpg" />
+          </label>
+          <label class="edit-profile-label">Display Name
+            <input id="profile-name-input" type="text" class="edit-profile-input" placeholder="Your name" />
+          </label>
+          <div id="profile-email-section">
+            <label class="edit-profile-label">Email
+              <input id="profile-email-input" type="email" class="edit-profile-input" placeholder="you@example.com" />
+            </label>
+          </div>
+          <div id="profile-password-section">
+            <label class="edit-profile-label">New Password
+              <input id="profile-password-input" type="password" class="edit-profile-input" placeholder="Leave blank to keep current" />
+            </label>
+          </div>
+          <div id="profile-reauth-section" style="display:none;">
+            <label class="edit-profile-label">Current Password (required for changes)
+              <input id="profile-current-password" type="password" class="edit-profile-input" placeholder="Enter current password" />
+            </label>
+          </div>
+          <button class="auth-submit" id="profile-save-btn" type="submit">Save Changes</button>
+        </form>
       </div>
     </div>
   `);
@@ -301,6 +345,115 @@ export function setupAuth(ui) {
     } catch (error) {
       ui.showToast(error.message, 4000, 'error');
     }
+  });
+
+  // --- Edit Profile ---
+  const _epDefaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
+  const _epPreview = document.getElementById('profile-pic-preview');
+  const _epPicInput = document.getElementById('profile-pic-input');
+  if (_epPicInput && _epPreview) {
+    _epPicInput.addEventListener('input', () => {
+      _epPreview.src = _epPicInput.value.trim() || _epDefaultAvatar;
+    });
+    _epPreview.addEventListener('error', () => { _epPreview.src = _epDefaultAvatar; });
+  }
+
+  const _reauthCheck = () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+    if (isGoogle) return;
+    const eInput = document.getElementById('profile-email-input');
+    const pInput = document.getElementById('profile-password-input');
+    if (!eInput || !pInput) return;
+    const emailChanged = eInput.value.trim() !== user.email;
+    const passwordChanged = pInput.value.length > 0;
+    const sec = document.getElementById('profile-reauth-section');
+    if (sec) sec.style.display = (emailChanged || passwordChanged) ? '' : 'none';
+  };
+  document.getElementById('profile-email-input')?.addEventListener('input', _reauthCheck);
+  document.getElementById('profile-password-input')?.addEventListener('input', _reauthCheck);
+
+  function _openEditProfile() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const modal = document.getElementById('edit-profile-modal');
+    const preview = document.getElementById('profile-pic-preview');
+    const picInput = document.getElementById('profile-pic-input');
+    const nameInput = document.getElementById('profile-name-input');
+    const emailInput = document.getElementById('profile-email-input');
+    const passwordInput = document.getElementById('profile-password-input');
+    const currentPasswordInput = document.getElementById('profile-current-password');
+
+    preview.src = user.photoURL || _epDefaultAvatar;
+    picInput.value = user.photoURL || '';
+    nameInput.value = user.displayName || '';
+    emailInput.value = user.email || '';
+    passwordInput.value = '';
+    currentPasswordInput.value = '';
+
+    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+    document.getElementById('profile-email-section').style.display = isGoogle ? 'none' : '';
+    document.getElementById('profile-password-section').style.display = isGoogle ? 'none' : '';
+    document.getElementById('profile-reauth-section').style.display = 'none';
+
+    modal.classList.remove('hidden');
+  }
+
+  async function _saveProfile() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const saveBtn = document.getElementById('profile-save-btn');
+    const newPhotoURL = document.getElementById('profile-pic-input').value.trim() || null;
+    const newName = document.getElementById('profile-name-input').value.trim();
+    const newEmail = document.getElementById('profile-email-input').value.trim();
+    const newPassword = document.getElementById('profile-password-input').value;
+    const currentPassword = document.getElementById('profile-current-password').value;
+    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+    const emailChanged = !isGoogle && newEmail !== user.email;
+    const passwordChanged = !isGoogle && newPassword.length > 0;
+
+    if (!newName) { ui.showToast('Display name cannot be empty.', 3000, 'warning'); document.getElementById('profile-name-input').focus(); return; }
+    if ((emailChanged || passwordChanged) && !currentPassword) { ui.showToast('Current password is required for email/password changes.', 4000, 'warning'); document.getElementById('profile-current-password').focus(); return; }
+    if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { ui.showToast('Please enter a valid email address.', 3500, 'warning'); return; }
+    if (newPassword && newPassword.length < 6) { ui.showToast('Password must be at least 6 characters.', 3500, 'warning'); return; }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    try {
+      if (emailChanged || passwordChanged) {
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+      }
+      await updateProfile(user, { displayName: newName, photoURL: newPhotoURL });
+      if (emailChanged) await updateEmail(user, newEmail);
+      if (passwordChanged) await updatePassword(user, newPassword);
+      syncAuthUI(auth.currentUser);
+      document.getElementById('edit-profile-modal').classList.add('hidden');
+      ui.showToast('Profile updated successfully!', 3000, 'success');
+    } catch (error) {
+      let msg = error.message || 'Could not update profile.';
+      const code = error.code || '';
+      if (code.includes('wrong-password') || code.includes('invalid-credential')) msg = 'Current password is incorrect.';
+      else if (code.includes('email-already-in-use')) msg = 'This email is already in use.';
+      else if (code.includes('invalid-email')) msg = 'Invalid email address.';
+      else if (code.includes('weak-password')) msg = 'Password must be at least 6 characters.';
+      else if (code.includes('requires-recent-login')) msg = 'Please sign out and sign in again first.';
+      ui.showToast(msg, 4500, 'error');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+    }
+  }
+
+  document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
+    toggleAccountMenu(false);
+    _openEditProfile();
+  });
+  document.getElementById('edit-profile-form')?.addEventListener('submit', (e) => { e.preventDefault(); _saveProfile(); });
+  document.querySelector('.edit-profile-close')?.addEventListener('click', () => { document.getElementById('edit-profile-modal').classList.add('hidden'); });
+  document.getElementById('edit-profile-modal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('edit-profile-modal')) document.getElementById('edit-profile-modal').classList.add('hidden');
   });
 
   document.addEventListener('click', (event) => {

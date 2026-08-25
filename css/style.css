@@ -2803,6 +2803,17 @@ body {
   width: 180px; min-height: 42px; padding: 0 16px; border: 0; background: transparent; color: #fff4eb; text-align: left; font-weight: 600; cursor: pointer;
 }
 .account-menu-item:hover { background: rgba(255,255,255,.04); }
+.account-menu-divider { height: 1px; background: rgba(255,230,210,.12); margin: 2px 0; }
+.edit-profile-card { width: min(100%, 440px); max-height: 85vh; overflow-y: auto; }
+.profile-pic-section { display: flex; justify-content: center; margin-bottom: 8px; }
+.profile-pic-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,218,190,.3); }
+#edit-profile-form { display: grid; gap: 13px; }
+#edit-profile-form label { display: grid; gap: 6px; color: #e9d8ca; font-size: 12px; font-weight: 600; }
+#edit-profile-form input {
+  width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid rgba(255,230,210,.16);
+  border-radius: 9px; background: #151213; color: #fff4e8; outline: none; box-sizing: border-box;
+}
+#edit-profile-form input:focus { border-color: #ff4b58; box-shadow: 0 0 0 3px rgba(255,61,75,.12); }
 .auth-google, .auth-submit {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
   border-radius: 10px; min-height: 46px; font-weight: 700;
