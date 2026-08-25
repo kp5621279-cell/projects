@@ -186,10 +186,31 @@ export function setupAuth(ui) {
 
   document.body.insertAdjacentHTML('beforeend', `
     <div class="account-menu hidden" id="account-menu" role="menu" aria-label="Account menu">
-      <button type="button" id="edit-profile-btn" class="account-menu-item account-menu-item-top">✏️ Edit Profile</button>
-      <button type="button" id="rewards-stats-btn" class="account-menu-item">🏆 Rewards & Stats</button>
+      <button type="button" id="edit-profile-btn" class="account-menu-item">
+        <div class="laser-ring"></div>
+        <div class="laser-bg"></div>
+        <div class="account-menu-item-content">
+          <span class="menu-icon">✏️</span>
+          <span>Edit Profile</span>
+        </div>
+      </button>
+      <button type="button" id="rewards-stats-btn" class="account-menu-item">
+        <div class="laser-ring"></div>
+        <div class="laser-bg"></div>
+        <div class="account-menu-item-content">
+          <span class="menu-icon">🏆</span>
+          <span>Rewards & Stats</span>
+        </div>
+      </button>
       <div class="account-menu-divider"></div>
-      <button type="button" id="logout-account-btn" class="account-menu-item">Log out</button>
+      <button type="button" id="logout-account-btn" class="account-menu-item logout-item">
+        <div class="laser-ring"></div>
+        <div class="laser-bg"></div>
+        <div class="account-menu-item-content">
+          <span class="menu-icon">🚪</span>
+          <span>Log out</span>
+        </div>
+      </button>
     </div>
     <div class="auth-overlay hidden" id="auth-modal">
       <div class="auth-card">
@@ -282,10 +303,35 @@ export function setupAuth(ui) {
   const accountMenu = document.getElementById('account-menu');
   const toggleAccountMenu = (forceOpen = null) => {
     if (!accountMenu) return;
-    const shouldOpen = forceOpen ?? !accountMenu.classList.contains('hidden');
+    const shouldOpen = forceOpen ?? accountMenu.classList.contains('hidden');
     accountMenu.classList.toggle('hidden', !shouldOpen);
     signInButton.setAttribute('aria-expanded', String(shouldOpen));
   };
+
+  let menuHoverTimeout = null;
+
+  const openAccountMenuOnHover = () => {
+    if (!auth.currentUser) return;
+    if (menuHoverTimeout) clearTimeout(menuHoverTimeout);
+    toggleAccountMenu(true);
+  };
+
+  const closeAccountMenuWithDelay = () => {
+    if (menuHoverTimeout) clearTimeout(menuHoverTimeout);
+    menuHoverTimeout = setTimeout(() => {
+      toggleAccountMenu(false);
+    }, 280);
+  };
+
+  signInButton.addEventListener('mouseenter', openAccountMenuOnHover);
+  signInButton.addEventListener('mouseleave', closeAccountMenuWithDelay);
+
+  if (accountMenu) {
+    accountMenu.addEventListener('mouseenter', () => {
+      if (menuHoverTimeout) clearTimeout(menuHoverTimeout);
+    });
+    accountMenu.addEventListener('mouseleave', closeAccountMenuWithDelay);
+  }
 
   signInButton.addEventListener('click', async () => {
     if (auth.currentUser) {
