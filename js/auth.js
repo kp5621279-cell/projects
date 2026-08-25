@@ -131,7 +131,9 @@ export function setupAuth(ui) {
       signInButton.title = 'Account';
       signInButton.classList.add('signed-in');
       signInButton.setAttribute('aria-expanded', 'false');
-      if (_avatarImg) _avatarImg.src = user.photoURL || _defaultAvatar;
+      // Check localStorage first for custom profile pic (base64), then Firebase URL
+      const localPic = localStorage.getItem(`zr_profile_pic_${user.uid}`);
+      if (_avatarImg) _avatarImg.src = localPic || user.photoURL || _defaultAvatar;
     } else {
       signInButton.textContent = 'Sign In';
       signInButton.title = 'Sign in';
@@ -452,8 +454,9 @@ export function setupAuth(ui) {
     const passwordInput = document.getElementById('profile-password-input');
     const currentPasswordInput = document.getElementById('profile-current-password');
 
-    preview.src = user.photoURL || _epDefaultAvatar;
-    picInput.value = user.photoURL || '';
+    const localPic = localStorage.getItem(`zr_profile_pic_${user.uid}`);
+    preview.src = localPic || user.photoURL || _epDefaultAvatar;
+    picInput.value = localPic || user.photoURL || '';
     nameInput.value = user.displayName || '';
     emailInput.value = user.email || '';
     passwordInput.value = '';
@@ -476,14 +479,13 @@ export function setupAuth(ui) {
     if (!user) return;
     const saveBtn = document.getElementById('profile-save-btn');
     const newPhotoInput = document.getElementById('profile-pic-input');
-    const newPhotoURL = newPhotoInput ? newPhotoInput.value.trim() : '';
+    const newPhotoRaw = newPhotoInput ? newPhotoInput.value.trim() : '';
     const newName = document.getElementById('profile-name-input').value.trim();
     const newEmail = document.getElementById('profile-email-input').value.trim();
     const newPassword = document.getElementById('profile-password-input').value;
     const currentPassword = document.getElementById('profile-current-password').value;
     const emailChanged = newEmail !== user.email;
     const passwordChanged = newPassword.length > 0;
-    const finalPhotoURL = newPhotoURL || user.photoURL || null;
 
     if (!newName) { ui.showToast('Display name cannot be empty.', 3000, 'warning'); document.getElementById('profile-name-input').focus(); return; }
     if ((emailChanged || passwordChanged) && !currentPassword) { ui.showToast('Current password is required for email/password changes.', 4000, 'warning'); document.getElementById('profile-current-password').focus(); return; }
@@ -492,17 +494,38 @@ export function setupAuth(ui) {
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
+
     try {
       if (emailChanged || passwordChanged) {
         const credential = EmailAuthProvider.credential(user.email, currentPassword);
         await reauthenticateWithCredential(user, credential);
       }
-      await updateProfile(user, { displayName: newName, photoURL: finalPhotoURL });
+
+      // Firebase photoURL only accepts a real URL (not base64).
+      // We store the base64/blob locally in localStorage and only
+      // pass a valid URL (or the existing one) to Firebase.
+      let firebasePhotoURL = user.photoURL || null;
+
+      if (newPhotoRaw && newPhotoRaw.startsWith('data:')) {
+        // Base64 image — save to localStorage, do NOT send to Firebase
+        try {
+          localStorage.setItem(`zr_profile_pic_${user.uid}`, newPhotoRaw);
+          firebasePhotoURL = user.photoURL || null; // keep existing Firebase URL unchanged
+        } catch (e) {
+          console.warn('localStorage quota exceeded, skipping local save', e);
+        }
+      } else if (newPhotoRaw && newPhotoRaw.startsWith('http')) {
+        // Valid URL — safe to send to Firebase
+        firebasePhotoURL = newPhotoRaw;
+      }
+
+      await updateProfile(user, { displayName: newName, photoURL: firebasePhotoURL });
       if (emailChanged) await updateEmail(user, newEmail);
       if (passwordChanged) await updatePassword(user, newPassword);
+
       syncAuthUI(auth.currentUser);
       document.getElementById('edit-profile-modal').classList.add('hidden');
-      ui.showToast('Profile updated successfully!', 3000, 'success');
+      ui.showToast('Profile updated successfully! ✅', 3000, 'success');
     } catch (error) {
       let msg = error.message || 'Could not update profile.';
       const code = error.code || '';
@@ -511,6 +534,7 @@ export function setupAuth(ui) {
       else if (code.includes('invalid-email')) msg = 'Invalid email address.';
       else if (code.includes('weak-password')) msg = 'Password must be at least 6 characters.';
       else if (code.includes('requires-recent-login')) msg = 'Please sign out and sign in again first.';
+      else if (code.includes('invalid-profile-attribute') || code.includes('photo-url')) msg = 'Profile picture too large. Try a smaller image.';
       ui.showToast(msg, 4500, 'error');
     } finally {
       saveBtn.disabled = false;
