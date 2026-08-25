@@ -112,6 +112,27 @@ export async function isUserSignedIn() {
   return !!auth.currentUser;
 }
 
+export function getCurrentUserProfile() {
+  const user = auth.currentUser;
+  const _defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
+  if (!user) {
+    return {
+      isSignedIn: false,
+      uid: 'guest',
+      displayName: 'Guest User',
+      photoURL: _defaultAvatar
+    };
+  }
+  const localPic = localStorage.getItem(`zr_profile_pic_${user.uid}`);
+  const displayName = user.displayName || (user.email ? user.email.split('@')[0] : 'Account');
+  return {
+    isSignedIn: true,
+    uid: user.uid,
+    displayName: displayName,
+    photoURL: localPic || user.photoURL || _defaultAvatar
+  };
+}
+
 export function setupAuth(ui) {
   const signInButton = document.querySelector('.btn-sign-in');
   const getStartedButton = document.getElementById('btn-yt-add-quick');

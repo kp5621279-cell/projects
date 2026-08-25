@@ -27,11 +27,20 @@ try:
     }
     if os.path.exists(uploads_dir):
         import shutil
+        import base64
+        data_obj = {}
         for src, dest in badge_map.items():
             s_path = os.path.join(uploads_dir, src)
             d_path = os.path.join(badges_dir, dest)
-            if os.path.exists(s_path) and not os.path.exists(d_path):
+            if os.path.exists(s_path):
                 shutil.copyfile(s_path, d_path)
+                with open(s_path, 'rb') as f:
+                    b64 = base64.b64encode(f.read()).decode('utf-8')
+                    key = dest.replace('badge-', '').replace('.png', '')
+                    data_obj[key] = f"data:image/png;base64,{b64}"
+        badges_js_path = os.path.join(DIRECTORY, 'js', 'badgesData.js')
+        with open(badges_js_path, 'w', encoding='utf-8') as f:
+            f.write(f"// Auto-generated badge images base64 data URIs\nexport const BADGE_BASE64 = {json.dumps(data_obj, indent=2)};\n")
 except Exception as e:
     pass
 

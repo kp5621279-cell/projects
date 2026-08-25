@@ -25,7 +25,7 @@ const MIME_TYPES = {
   '.flac': 'audio/flac'
 };
 
-// Ensure assets/badges directory exists & copy user uploaded badges if found
+// Ensure assets/badges directory exists, copy user uploaded badges & generate base64 data
 try {
   const badgesDir = path.join(BASE_DIR, 'assets', 'badges');
   if (!fs.existsSync(badgesDir)) fs.mkdirSync(badgesDir, { recursive: true });
@@ -38,14 +38,20 @@ try {
     'media_1787639454177.png': 'badge-green.png'
   };
 
+  const dataObj = {};
   if (fs.existsSync(uploadsDir)) {
     for (const [src, dest] of Object.entries(badgeMap)) {
       const srcPath = path.join(uploadsDir, src);
       const destPath = path.join(badgesDir, dest);
-      if (fs.existsSync(srcPath) && !fs.existsSync(destPath)) {
+      if (fs.existsSync(srcPath)) {
         fs.copyFileSync(srcPath, destPath);
+        const b64 = fs.readFileSync(srcPath).toString('base64');
+        const key = dest.replace('badge-', '').replace('.png', '');
+        dataObj[key] = `data:image/png;base64,${b64}`;
       }
     }
+    const badgesDataJsPath = path.join(BASE_DIR, 'js', 'badgesData.js');
+    fs.writeFileSync(badgesDataJsPath, `// Auto-generated badge images base64 data URIs\nexport const BADGE_BASE64 = ${JSON.stringify(dataObj, null, 2)};\n`);
   }
 } catch (e) {
   console.warn('Badge assets setup notice:', e.message);

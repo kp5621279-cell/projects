@@ -4,10 +4,17 @@
  *   5 Songs: Yellow Fruit Badge
  *  50 Songs: Cyan Fruit Badge
  * 1000 Songs: Red Fruit Badge
- * 5000 Songs: Green Mythic Fruit Badge (Rare)
+ * 5000 Songs: Mythic Green Fruit Badge (Ultra Rare)
  */
 
 import { storage } from './storage.js';
+import { getCurrentUserProfile } from './auth.js';
+
+// Lazy loaded base64 cache if badgesData.js exists
+let BADGE_BASE64_CACHE = {};
+import('./badgesData.js').then(mod => {
+  if (mod && mod.BADGE_BASE64) BADGE_BASE64_CACHE = mod.BADGE_BASE64;
+}).catch(() => {});
 
 export const BADGE_TIERS = [
   {
@@ -16,8 +23,9 @@ export const BADGE_TIERS = [
     tierName: 'Novice Listener',
     requiredSongs: 5,
     color: '#FFB800',
-    glowColor: 'rgba(255, 184, 0, 0.65)',
+    glowColor: 'rgba(255, 184, 0, 0.75)',
     image: 'assets/badges/badge-yellow.png',
+    fallbackSvg: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="30,10 70,10 95,45 75,90 25,90 5,45" fill="%23FF9900" stroke="%23FFE066" stroke-width="4"/><circle cx="35" cy="45" r="8" fill="%23FFFFFF"/><circle cx="65" cy="45" r="8" fill="%23FFFFFF"/><path d="M 35 65 Q 50 80 65 65" stroke="%23FFFFFF" stroke-width="4" fill="none"/></svg>`,
     description: 'Listen to 5 songs on ZR Beats'
   },
   {
@@ -26,8 +34,9 @@ export const BADGE_TIERS = [
     tierName: 'Pro Melophile',
     requiredSongs: 50,
     color: '#00E5FF',
-    glowColor: 'rgba(0, 229, 255, 0.65)',
+    glowColor: 'rgba(0, 229, 255, 0.75)',
     image: 'assets/badges/badge-cyan.png',
+    fallbackSvg: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="30,10 70,10 95,45 75,90 25,90 5,45" fill="%2300BCD4" stroke="%2380DEEA" stroke-width="4"/><circle cx="35" cy="45" r="8" fill="%23FFFFFF"/><circle cx="65" cy="45" r="8" fill="%23FFFFFF"/><path d="M 35 65 Q 50 80 65 65" stroke="%23FFFFFF" stroke-width="4" fill="none"/></svg>`,
     description: 'Listen to 50 songs on ZR Beats'
   },
   {
@@ -36,8 +45,9 @@ export const BADGE_TIERS = [
     tierName: 'Master Virtuoso',
     requiredSongs: 1000,
     color: '#FF2E4D',
-    glowColor: 'rgba(255, 46, 77, 0.75)',
+    glowColor: 'rgba(255, 46, 77, 0.85)',
     image: 'assets/badges/badge-red.png',
+    fallbackSvg: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="30,10 70,10 95,45 75,90 25,90 5,45" fill="%23E91E63" stroke="%23F48FB1" stroke-width="4"/><circle cx="35" cy="45" r="8" fill="%23FFFFFF"/><circle cx="65" cy="45" r="8" fill="%23FFFFFF"/><path d="M 35 65 Q 50 80 65 65" stroke="%23FFFFFF" stroke-width="4" fill="none"/></svg>`,
     description: 'Listen to 1,000 songs on ZR Beats'
   },
   {
@@ -47,8 +57,9 @@ export const BADGE_TIERS = [
     isRare: true,
     requiredSongs: 5000,
     color: '#00FF66',
-    glowColor: 'rgba(0, 255, 102, 0.9)',
+    glowColor: 'rgba(0, 255, 102, 0.95)',
     image: 'assets/badges/badge-green.png',
+    fallbackSvg: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="15" y="15" width="70" height="70" rx="20" fill="%2300E676" stroke="%23B9F6CA" stroke-width="5"/><circle cx="35" cy="45" r="8" fill="%23FFFFFF"/><circle cx="65" cy="45" r="8" fill="%23FFFFFF"/><path d="M 35 65 Q 50 82 65 65" stroke="%23FFFFFF" stroke-width="5" fill="none"/></svg>`,
     description: 'Listen to 5,000 songs • Ultra Rare Badge'
   }
 ];
@@ -57,6 +68,14 @@ class RewardsManager {
   constructor() {
     this.currentUserId = 'guest';
     this.currentTrackPlayLogged = null;
+  }
+
+  getBadgeImage(badge) {
+    if (!badge) return '';
+    if (BADGE_BASE64_CACHE && BADGE_BASE64_CACHE[badge.id]) {
+      return BADGE_BASE64_CACHE[badge.id];
+    }
+    return badge.image;
   }
 
   setUserId(userId) {
@@ -136,17 +155,19 @@ class RewardsManager {
 
   updateTopbarBadge() {
     const badge = this.getEquippedBadge();
-    const avatarWraps = document.querySelectorAll('.btn-sign-in.signed-in, .profile-pic-section, .rewards-avatar-wrapper');
+    const avatarWraps = document.querySelectorAll('.topbar-avatar-badge-wrap, .rewards-avatar-wrapper');
     
     avatarWraps.forEach(wrap => {
       let badgeEl = wrap.querySelector('.profile-corner-badge');
       if (badge) {
+        const imgSrc = this.getBadgeImage(badge);
         if (!badgeEl) {
           badgeEl = document.createElement('img');
           badgeEl.className = 'profile-corner-badge';
           wrap.appendChild(badgeEl);
         }
-        badgeEl.src = badge.image;
+        badgeEl.src = imgSrc;
+        badgeEl.onerror = () => { badgeEl.src = badge.fallbackSvg; };
         badgeEl.alt = badge.name;
         badgeEl.title = `${badge.name} (${badge.tierName})`;
         badgeEl.setAttribute('data-tier', badge.id);
@@ -207,11 +228,10 @@ class RewardsManager {
     // Next badge target
     const nextBadge = BADGE_TIERS.find(b => songsPlayed < b.requiredSongs);
 
-    // Profile photo
-    const user = window.SpotifyApp?.auth?.currentUser;
-    const localPic = user ? localStorage.getItem(`zr_profile_pic_${user.uid}`) : null;
-    const defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
-    const avatarUrl = localPic || user?.photoURL || defaultAvatar;
+    // Profile photo & user name
+    const profile = getCurrentUserProfile();
+    const displayName = profile.displayName || 'krish';
+    const avatarUrl = profile.photoURL;
 
     container.innerHTML = `
       <!-- User Overview Card -->
@@ -219,11 +239,11 @@ class RewardsManager {
         <div class="rewards-avatar-wrapper">
           <img src="${avatarUrl}" class="rewards-user-img" alt="Profile" />
           ${equipped ? `
-            <img src="${equipped.image}" class="profile-corner-badge modal-corner-badge" title="${equipped.name}" style="box-shadow: 0 0 12px ${equipped.glowColor}" />
+            <img src="${this.getBadgeImage(equipped)}" class="profile-corner-badge modal-corner-badge" title="${equipped.name}" style="box-shadow: 0 0 14px ${equipped.glowColor}" onerror="this.src='${equipped.fallbackSvg}'" />
           ` : ''}
         </div>
         <div class="rewards-user-meta">
-          <h3 class="rewards-user-name">${user?.displayName || 'Music Listener'}</h3>
+          <h3 class="rewards-user-name">${displayName}</h3>
           <div class="rewards-equipped-tag" style="color: ${equipped ? equipped.color : '#999'}">
             ${equipped ? `⭐ Active Badge: <strong>${equipped.name}</strong>` : 'No badge equipped yet'}
           </div>
@@ -244,7 +264,7 @@ class RewardsManager {
             <div class="rewards-progress-fill" style="width: ${Math.min(100, (songsPlayed / nextBadge.requiredSongs) * 100)}%; background: ${nextBadge.color}; box-shadow: 0 0 10px ${nextBadge.glowColor};"></div>
           </div>
           <div class="rewards-progress-sub">
-            Only <strong>${nextBadge.requiredSongs - songsPlayed}</strong> more songs to unlock!
+            Only <strong>${Math.max(0, nextBadge.requiredSongs - songsPlayed)}</strong> more songs to unlock!
           </div>
         </div>
       ` : `
@@ -259,12 +279,13 @@ class RewardsManager {
           const isUnlocked = songsPlayed >= badge.requiredSongs;
           const isEquipped = equipped && equipped.id === badge.id;
           const progressPercent = Math.min(100, Math.round((songsPlayed / badge.requiredSongs) * 100));
+          const badgeImgSrc = this.getBadgeImage(badge);
 
           return `
             <div class="badge-card ${isUnlocked ? 'unlocked' : 'locked'} ${isEquipped ? 'equipped' : ''} ${badge.isRare ? 'rare-badge' : ''}" style="--badge-color: ${badge.color}; --badge-glow: ${badge.glowColor};">
               ${badge.isRare ? `<span class="badge-rare-ribbon">⭐ ULTRA RARE</span>` : ''}
               <div class="badge-img-box">
-                <img src="${badge.image}" alt="${badge.name}" class="badge-display-img ${isUnlocked ? '' : 'locked-img'}" />
+                <img src="${badgeImgSrc}" alt="${badge.name}" class="badge-display-img ${isUnlocked ? '' : 'locked-img'}" onerror="this.src='${badge.fallbackSvg}'" />
                 ${!isUnlocked ? `<div class="badge-lock-overlay">🔒</div>` : ''}
               </div>
               <h4 class="badge-card-name">${badge.name}</h4>
