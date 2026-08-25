@@ -2574,12 +2574,37 @@ body {
 }
 .btn-sign-in.signed-in {
   width: auto;
-  min-width: 110px;
-  max-width: 180px;
-  padding-inline: 18px;
+  min-width: 90px;
+  max-width: 220px;
+  padding: 4px 16px 4px 6px;
+  gap: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   background: linear-gradient(135deg, #f9f4ef, #f0e0d5);
   color: #291a18;
   box-shadow: 0 8px 20px rgba(255, 224, 203, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.btn-sign-in-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+}
+.btn-sign-in-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #291a18;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .btn-upgrade-pill {
   width: 160px;
@@ -2906,7 +2931,55 @@ body {
 @media (max-width: 700px) {
   .topbar { padding: 0 16px; }
   .brand-logo { display: none; }
-  .btn-sign-in { width: 66px; min-width: 66px; }
+  .btn-sign-in:not(.signed-in) { width: 66px; min-width: 66px; }
   .btn-upgrade-pill { width: 88px; min-width: 88px; }
 }
+
+/* User Profile Pill with Avatar Image */
+.btn-sign-in.signed-in {
+  width: auto !important;
+  min-width: 80px !important;
+  max-width: 220px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 3px 14px 3px 4px !important;
+  gap: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  background: linear-gradient(135deg, #f9f4ef, #f0e0d5) !important;
+  color: #291a18 !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+  cursor: pointer !important;
+  overflow: visible !important;
+}
+.btn-sign-in.signed-in:hover {
+  transform: translateY(-1px) scale(1.02) !important;
+  filter: brightness(1.04) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+}
+.btn-sign-in-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 1.5px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+}
+.btn-sign-in-name {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #291a18 !important;
+  max-width: 130px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+}
+
 

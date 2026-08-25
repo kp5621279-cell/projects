@@ -127,19 +127,30 @@ export function setupAuth(ui) {
     if (isSignedIn) {
       const displayName = user.displayName || user.email || 'Account';
       const buttonLabel = displayName.includes('@') ? displayName.split('@')[0].trim() : displayName.trim() || 'Account';
-      signInButton.textContent = buttonLabel;
+      
+      // Check localStorage first for custom profile pic (base64), then Firebase URL, then default avatar
+      const localPic = localStorage.getItem(`zr_profile_pic_${user.uid}`);
+      const finalAvatar = localPic || user.photoURL || _defaultAvatar;
+
+      signInButton.innerHTML = `
+        <img class="btn-sign-in-avatar" src="${finalAvatar}" alt="${buttonLabel}" />
+        <span class="btn-sign-in-name truncate">${buttonLabel}</span>
+      `;
       signInButton.title = 'Account';
       signInButton.classList.add('signed-in');
       signInButton.setAttribute('aria-expanded', 'false');
-      // Check localStorage first for custom profile pic (base64), then Firebase URL
-      const localPic = localStorage.getItem(`zr_profile_pic_${user.uid}`);
-      if (_avatarImg) _avatarImg.src = localPic || user.photoURL || _defaultAvatar;
+
+      if (_avatarImg) _avatarImg.src = finalAvatar;
+      const avatarWrapper = document.querySelector('.user-avatar-btn');
+      if (avatarWrapper) avatarWrapper.style.display = 'none';
     } else {
-      signInButton.textContent = 'Sign In';
+      signInButton.innerHTML = 'Sign In';
       signInButton.title = 'Sign in';
       signInButton.classList.remove('signed-in');
       signInButton.setAttribute('aria-expanded', 'false');
       if (_avatarImg) _avatarImg.src = _defaultAvatar;
+      const avatarWrapper = document.querySelector('.user-avatar-btn');
+      if (avatarWrapper) avatarWrapper.style.display = '';
     }
   };
 
