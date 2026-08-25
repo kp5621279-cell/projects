@@ -394,19 +394,34 @@ export function setupAuth(ui) {
       if (!file) return;
       if (!file.type.startsWith('image/')) { ui.showToast('Please select an image file.', 3000, 'warning'); return; }
       if (file.size > 5 * 1024 * 1024) { ui.showToast('Image must be under 5MB.', 3000, 'warning'); return; }
+
       const uploadBtn = document.querySelector('.profile-pic-upload-btn');
-      if (uploadBtn) { uploadBtn.textContent = 'Uploading...'; uploadBtn.style.pointerEvents = 'none'; }
+      const preview = document.getElementById('profile-pic-preview');
+      const picInput = document.getElementById('profile-pic-input');
+
+      // Instantly show a local blob preview — no waiting
+      const blobUrl = URL.createObjectURL(file);
+      if (preview) preview.src = blobUrl;
+
+      // Show "Processing..." briefly
+      if (uploadBtn) { uploadBtn.innerHTML = '<span style="opacity:0.7">Processing...</span>'; uploadBtn.style.pointerEvents = 'none'; }
+
       try {
         const resizedDataURL = await _resizeImage(file, 200, 200);
-        const finalUrl = resizedDataURL;
-        document.getElementById('profile-pic-preview').src = finalUrl;
-        document.getElementById('profile-pic-input').value = finalUrl;
-        ui.showToast('Profile picture updated!', 3000, 'success');
+        // Swap preview from blob to final resized data URL
+        if (preview) preview.src = resizedDataURL;
+        if (picInput) picInput.value = resizedDataURL;
+        ui.showToast('Profile picture ready! Click Save Changes.', 3000, 'success');
       } catch (err) {
         console.warn('Image processing failed:', err);
-        ui.showToast('Failed to process image. Try again.', 4000, 'error');
+        // Use blob URL as fallback — still works locally
+        if (picInput) picInput.value = blobUrl;
+        ui.showToast('Image loaded (original size). Click Save Changes.', 3000, 'info');
       } finally {
-        if (uploadBtn) { uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg> Choose Photo'; uploadBtn.style.pointerEvents = ''; }
+        if (uploadBtn) {
+          uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg> Change Photo';
+          uploadBtn.style.pointerEvents = '';
+        }
         _epFileInput.value = '';
       }
     });

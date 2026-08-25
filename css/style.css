@@ -1112,9 +1112,25 @@ input, textarea {
 .btn-more-options {
   color: var(--ZR-text-subdued);
   opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
-.track-row:hover .btn-more-options {
+.track-row:hover .btn-more-options,
+.compact-track-row:hover .btn-more-options {
   opacity: 1;
+}
+.btn-more-options:hover {
+  color: var(--ZR-text-base);
+  transform: scale(1.1);
+}
+.btn-more-player {
+  color: var(--ZR-text-subdued);
+  opacity: 0.8;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.btn-more-player:hover {
+  opacity: 1;
+  color: var(--ZR-text-base);
+  transform: scale(1.1);
 }
 
 /* Equalizer Bars Animation */

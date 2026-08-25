@@ -421,10 +421,29 @@ class ZRApp {
           }
           break;
         }
+        case 'open-player-menu': {
+          e.stopPropagation();
+          if (player.currentTrack) {
+            const rect = actionEl.getBoundingClientRect();
+            const fakeEv = {
+              preventDefault: () => {},
+              clientX: Math.max(10, rect.left - 120),
+              clientY: Math.max(10, rect.top - 240)
+            };
+            this.openContextMenu(fakeEv, player.currentTrack.id);
+          }
+          break;
+        }
         case 'open-track-menu': {
           e.stopPropagation();
           const playlistId = actionEl.getAttribute('data-playlist-id') || '';
-          this.openContextMenu(e, id, playlistId);
+          const rect = actionEl.getBoundingClientRect();
+          const fakeEv = {
+            preventDefault: () => {},
+            clientX: Math.min(rect.left, window.innerWidth - 240),
+            clientY: Math.min(rect.top, window.innerHeight - 260)
+          };
+          this.openContextMenu(fakeEv, id, playlistId);
           break;
         }
         case 'play-track-in-context': {
@@ -760,6 +779,11 @@ class ZRApp {
           <span>▶</span>
         </div>
         <div class="context-submenu">
+          <div class="context-item text-spotify-green font-semibold" data-action="context-new-playlist">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            <span>New Playlist</span>
+          </div>
+          <div class="context-divider"></div>
           ${playlists.map(pl => `
             <div class="context-item" data-action="context-add-to-playlist" data-playlist-id="${pl.id}" data-track-id="${track.id}">
               <span>${pl.title}</span>
@@ -776,6 +800,14 @@ class ZRApp {
       ` : ''}
 
       <div class="context-divider"></div>
+      <div class="context-item" data-action="context-lyrics">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2V7h2v5.5z"/></svg>
+        <span>View Lyrics</span>
+      </div>
+      <div class="context-item" data-action="context-artist" data-id="${track.artistId || track.artist}">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <span>Go to Artist</span>
+      </div>
       <div class="context-item" data-action="context-copy-link" data-id="${track.id}">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
         <span>Copy Song Link</span>
@@ -787,7 +819,7 @@ class ZRApp {
     const mouseX = e.clientX;
     const mouseY = e.clientY;
     const menuWidth = 230;
-    const menuHeight = 260;
+    const menuHeight = 310;
 
     const posX = mouseX + menuWidth > window.innerWidth ? mouseX - menuWidth : mouseX;
     const posY = mouseY + menuHeight > window.innerHeight ? mouseY - menuHeight : mouseY;
@@ -805,20 +837,21 @@ class ZRApp {
         } else if (action === 'context-queue') {
           player.addToQueue(track);
           ui.showToast(`Added "${track.title}" to queue`);
+        } else if (action === 'context-new-playlist') {
+          ui.openCreatePlaylistModal();
+        } else if (action === 'context-lyrics') {
+          ui.navigateTo('lyrics');
+        } else if (action === 'context-artist') {
+          ui.navigateTo('artist', item.getAttribute('data-id') || track.artist);
         } else if (action === 'context-add-to-playlist') {
           const plId = item.getAttribute('data-playlist-id');
-          showAuthDetailsLoader('Adding to playlist…');
           const success = storage.addTrackToPlaylist(plId, track.id);
-          setTimeout(() => {
-            hideAuthDetailsLoader();
-            ui.showToast(success ? 'Added to playlist!' : 'Track already in this playlist', 3000, success ? 'success' : 'warning');
-            // If the user is currently viewing this playlist, refresh it so changes appear immediately
-            try {
-              if (ui.currentView === 'playlist' && ui.currentParam === plId) {
-                ui.renderPlaylist(plId);
-              }
-            } catch (e) { console.debug('re-render playlist failed', e); }
-          }, 1200);
+          ui.showToast(success ? 'Added to playlist!' : 'Track already in this playlist', 3000, success ? 'success' : 'warning');
+          try {
+            if (ui.currentView === 'playlist' && ui.currentParam === plId) {
+              ui.renderPlaylist(plId);
+            }
+          } catch (e) { console.debug('re-render playlist failed', e); }
         } else if (action === 'context-remove-from-playlist') {
           const plId = item.getAttribute('data-playlist-id');
           storage.removeTrackFromPlaylist(plId, track.id);
