@@ -40,6 +40,8 @@ class ZRApp {
     setTimeout(() => {
       this.hideSplash();
       rewardsManager.updateTopbarBadge();
+      // Mark as visited so splash is skipped on future reloads
+      try { localStorage.setItem('ZR_HAS_VISITED', '1'); } catch (e) {}
     }, 1200);
 
     window.ZRApp = this;
@@ -47,6 +49,13 @@ class ZRApp {
 
   showSplash() {
     const splash = document.getElementById('splash-screen');
+    // Skip splash on reload — only show on first visit
+    const hasVisited = localStorage.getItem('ZR_HAS_VISITED');
+    if (hasVisited && splash) {
+      splash.remove(); // remove immediately, no animation
+      return;
+    }
+    // First visit — show splash
     if (splash) splash.classList.remove('fade-out');
   }
 
@@ -57,8 +66,9 @@ class ZRApp {
     setTimeout(() => {
       if (splash) splash.remove();
       try {
-        // After splash removed, show detected device and login message
-        if (window.ui && typeof window.ui.showToast === 'function') {
+        // After splash removed, show detected device and login message (first visit only)
+        const alreadyVisited = !!localStorage.getItem('ZR_HAS_VISITED');
+        if (!alreadyVisited && window.ui && typeof window.ui.showToast === 'function') {
           const label = window.ui.deviceLabel || (document.documentElement.classList.contains('mobile') ? 'Mobile' : 'Desktop');
           window.ui.showToast(`Device detected: ${label} — Logged in as ${label}`, 4200, 'info');
         }

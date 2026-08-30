@@ -21,11 +21,37 @@ class UIManager {
     this.isVisualizerOpen = false;
   }
 
+  // Persist / restore navigation state across reloads
+  _saveNavState() {
+    try {
+      localStorage.setItem('ZR_nav_state', JSON.stringify({
+        view: this.currentView,
+        param: this.currentParam,
+        query: this.searchQuery
+      }));
+    } catch (e) {}
+  }
+
+  _restoreNavState() {
+    try {
+      const raw = localStorage.getItem('ZR_nav_state');
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+
   init() {
     this.cacheDOMElements();
     this.setupPlayerListeners();
     this.renderSidebarPlaylists();
-    this.navigateTo('home');
+    // Restore last view or default to home
+    const saved = this._restoreNavState();
+    if (saved && saved.view) {
+      this.searchQuery = saved.query || '';
+      this.navigateTo(saved.view, saved.param || null);
+    } else {
+      this.navigateTo('home');
+    }
     if (this.btnDiscoverBack) this.btnDiscoverBack.addEventListener('click', () => this.goBack());
     this.detectAndApplyDevice();
     this.setupDeviceAutoRefresh();
@@ -189,6 +215,8 @@ class UIManager {
       default:
         this.renderHome();
     }
+    // Save navigation state for reload persistence
+    this._saveNavState();
   }
 
   goBack() {
