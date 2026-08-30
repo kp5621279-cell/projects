@@ -269,22 +269,15 @@ class StorageManager {
         for (const remote of remotePlaylists) {
           const localIdx = this.userPlaylists.findIndex(p => p.id === remote.id);
           if (localIdx > -1) {
-            // EXISTING playlist — update metadata, merge trackIds conservatively
+            // EXISTING playlist — ALWAYS union trackIds, NEVER replace.
+            // Remote snapshot can be stale or have different tracks from another device.
+            // Union is the ONLY safe operation — it never loses tracks.
             const localPl = this.userPlaylists[localIdx];
-            const localTrackCount = (localPl.trackIds || []).length;
-            const remoteTrackCount = (remote.trackIds || []).length;
-
-            if (remoteTrackCount >= localTrackCount) {
-              // Remote has same or more tracks — it's newer, take remote's tracks
-              localPl.trackIds = [...new Set(remote.trackIds || [])];
-              this._playlistMaxTrackCount[remote.id] = Math.max(
-                this._playlistMaxTrackCount[remote.id] || 0,
-                localPl.trackIds.length
-              );
-            } else {
-              // Remote has FEWER tracks — it's stale, union to protect local data
-              localPl.trackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
-            }
+            localPl.trackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
+            this._playlistMaxTrackCount[remote.id] = Math.max(
+              this._playlistMaxTrackCount[remote.id] || 0,
+              localPl.trackIds.length
+            );
             // Update metadata from remote
             localPl.title = remote.title || localPl.title;
             localPl.description = remote.description || localPl.description;
