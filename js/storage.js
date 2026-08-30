@@ -52,6 +52,8 @@ class StorageManager {
     this._initialFetchDone = false;
     this._playlistDirtyFlags = {}; // track if a playlist has unsaved changes
     this._playlistMaxTrackCount = {}; // track max tracks ever seen per playlist (safety net)
+    this._playlistPersistLocks = {}; // per-playlist write lock (true = write in progress)
+    this._playlistPersistQueued = {}; // pending write needed after current completes
 
     // Listen to Firebase auth state changes
     onAuthStateChanged(auth, async (user) => {
@@ -411,18 +413,23 @@ class StorageManager {
   }
 
   /**
-   * Actual Firestore write — always reads the LATEST in-memory state.
+   * Actual Firestore write — serialized per playlist via lock.
+   * Always reads the LATEST in-memory state so rapid adds are never lost.
    */
   async _doPersistPlaylist(playlistId) {
     if (!this.currentUserId) return;
+    // If another write is in flight for this playlist, queue one more write after it
+    if (this._playlistPersistLocks[playlistId]) {
+      this._playlistPersistQueued[playlistId] = true;
+      return;
+    }
+    this._playlistPersistLocks[playlistId] = true;
     try {
       const latestPl = this.userPlaylists.find(p => p.id === playlistId);
-      if (!latestPl) return;
-      // Snapshot the track count BEFORE persist so we can detect regression
-      const trackCountBefore = (latestPl.trackIds || []).length;
+      if (!latestPl) { this._playlistPersistLocks[playlistId] = false; return; }
       // Mark write timestamp — prevents realtime listener from overwriting
       this._localPlaylistWrites[playlistId] = Date.now();
-      // Snapshot what we are about to write
+      // Read the VERY LATEST trackIds (includes any adds made during wait)
       const trackIdsToWrite = [...new Set(latestPl.trackIds || [])];
       await setDoc(doc(this._userPlaylistsRef(), playlistId), {
         user_id: this.currentUserId,
@@ -439,7 +446,13 @@ class StorageManager {
       this._playlistDirtyFlags[playlistId] = false;
     } catch (error) {
       console.warn('Could not persist playlist to Firestore:', error);
-      // Keep dirty flag so next attempt retries
+    } finally {
+      this._playlistPersistLocks[playlistId] = false;
+      // If a write was queued during this write, run it now (reads latest state)
+      if (this._playlistPersistQueued[playlistId]) {
+        this._playlistPersistQueued[playlistId] = false;
+        this._doPersistPlaylist(playlistId);
+      }
     }
   }
 
@@ -677,6 +690,8 @@ class StorageManager {
       delete this._playlistPersistTimers[id];
     }
     delete this._playlistDirtyFlags[id];
+    delete this._playlistPersistLocks[id];
+    delete this._playlistPersistQueued[id];
     const deleted = this.userPlaylists.find(p => p.id === id);
     this.userPlaylists = this.userPlaylists.filter(p => p.id !== id);
     // Persist to Firestore — if it fails, restore the playlist in-memory
