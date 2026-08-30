@@ -258,78 +258,51 @@ class StorageManager {
             updated_at: data.updated_at || null
           };
         });
-        // Smart merge: don't let remote overwrite recent local writes
-        // For each playlist, if we wrote locally within the last 5 seconds OR have dirty flags,
-        // merge remote trackIds INTO the local version (union) instead of replacing
-        const now = Date.now();
+        // ─── CRITICAL RULE ────────────────────────────────────────────
+        // The remote listener MUST NEVER replace trackIds with fewer tracks.
+        // TrackIds are only modified by addTrackToPlaylist / removeTrackFromPlaylist.
+        // Remote snapshot may be stale (behind local writes), so we:
+        //   1. Always take the UNION of local + remote trackIds
+        //   2. Never allow count to drop below what local had
+        //   3. Only update metadata (title, desc, cover, color) from remote
+        // ────────────────────────────────────────────────────────────────
         for (const remote of remotePlaylists) {
           const localIdx = this.userPlaylists.findIndex(p => p.id === remote.id);
-          const lastLocalWrite = this._localPlaylistWrites[remote.id] || 0;
-          const hasDirtyFlag = !!this._playlistDirtyFlags[remote.id];
-          const isRecentLocalWrite = (now - lastLocalWrite) < 5000;
-          if (localIdx > -1 && (isRecentLocalWrite || hasDirtyFlag)) {
-            // Local has recent or pending changes — merge remote into local (union of trackIds)
+          if (localIdx > -1) {
+            // EXISTING playlist — update metadata, merge trackIds conservatively
             const localPl = this.userPlaylists[localIdx];
-            const mergedTrackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
-            // SAFETY: never let track count regress below max ever seen
-            const maxCount = this._playlistMaxTrackCount[remote.id] || 0;
-            if (mergedTrackIds.length < maxCount) {
-              console.warn(`[storage] Track count regression detected for ${remote.id}: merged=${mergedTrackIds.length} < max=${maxCount}, keeping local`);
-              // Keep local trackIds entirely — remote data is stale
-              this.userPlaylists[localIdx] = {
-                ...localPl,
-                trackIds: [...new Set(localPl.trackIds || [])],
-                title: remote.title || localPl.title,
-                description: remote.description || localPl.description,
-                cover: remote.cover || localPl.cover,
-                color: remote.color || localPl.color
-              };
+            const localTrackCount = (localPl.trackIds || []).length;
+            const remoteTrackCount = (remote.trackIds || []).length;
+
+            if (remoteTrackCount >= localTrackCount) {
+              // Remote has same or more tracks — it's newer, take remote's tracks
+              localPl.trackIds = [...new Set(remote.trackIds || [])];
+              this._playlistMaxTrackCount[remote.id] = Math.max(
+                this._playlistMaxTrackCount[remote.id] || 0,
+                localPl.trackIds.length
+              );
             } else {
-              this._playlistMaxTrackCount[remote.id] = mergedTrackIds.length;
-              this.userPlaylists[localIdx] = {
-                ...localPl,
-                trackIds: mergedTrackIds,
-                title: remote.title || localPl.title,
-                description: remote.description || localPl.description,
-                cover: remote.cover || localPl.cover,
-                color: remote.color || localPl.color
-              };
+              // Remote has FEWER tracks — it's stale, union to protect local data
+              localPl.trackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
             }
-          } else if (localIdx > -1) {
-            // No recent local write — safe to replace, but still merge trackIds as safety net
-            const localPl = this.userPlaylists[localIdx];
-            const localTracks = localPl.trackIds || [];
-            const remoteTracks = remote.trackIds || [];
-            // Always take union — prevents losing tracks in transit
-            const mergedTrackIds = [...new Set([...localTracks, ...remoteTracks])];
-            // SAFETY: never let track count regress below max ever seen
-            const maxCount = this._playlistMaxTrackCount[remote.id] || 0;
-            const finalTrackIds = mergedTrackIds.length < maxCount
-              ? [...new Set(localTracks)] // keep local only — remote is stale
-              : mergedTrackIds;
-            this._playlistMaxTrackCount[remote.id] = Math.max(maxCount, finalTrackIds.length);
-            this.userPlaylists[localIdx] = {
-              ...remote,
-              trackIds: finalTrackIds
-            };
+            // Update metadata from remote
+            localPl.title = remote.title || localPl.title;
+            localPl.description = remote.description || localPl.description;
+            localPl.cover = remote.cover || localPl.cover;
+            localPl.color = remote.color || localPl.color;
+            localPl.updated_at = remote.updated_at || localPl.updated_at;
           } else if (!this._localPlaylistDeletes.has(remote.id)) {
-            // Only add if not locally deleted
+            // NEW playlist from remote — add it
             this.userPlaylists.push(remote);
           }
         }
-        // Remove playlists deleted remotely, but keep locally created ones not yet in Firestore
+        // Remove playlists that were EXPLICITLY deleted locally
+        // Never remove playlists just because they're missing from a stale snapshot
         this.userPlaylists = this.userPlaylists.filter(p => {
-          const inRemote = remotePlaylists.some(r => r.id === p.id);
-          const locallyCreated = this._localPlaylistCreates.has(p.id);
-          const locallyDeleted = this._localPlaylistDeletes.has(p.id);
-          // Keep if: in remote OR locally created (waiting for Firestore sync)
-          // Remove if: not in remote AND not locally created OR locally deleted
-          if (locallyDeleted) return false;
-          if (inRemote) {
-            this._localPlaylistCreates.delete(p.id); // confirmed in Firestore, clean up
-            return true;
-          }
-          return locallyCreated; // keep locally created until Firestore confirms
+          if (this._localPlaylistDeletes.has(p.id)) return false;
+          // Keep all other playlists — even if not in this snapshot (stale snapshot)
+          this._localPlaylistCreates.delete(p.id); // clean up tracking
+          return true;
         });
         // Refresh UI if viewing a playlist
         try {
