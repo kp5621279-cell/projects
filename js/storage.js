@@ -50,6 +50,7 @@ class StorageManager {
     this._localPlaylistDeletes = new Set(); // track locally deleted playlist IDs
     this._localPlaylistCreates = new Set(); // track locally created playlist IDs
     this._initialFetchDone = false;
+    this._playlistDirtyFlags = {}; // track if a playlist has unsaved changes
 
     // Listen to Firebase auth state changes
     onAuthStateChanged(auth, async (user) => {
@@ -215,9 +216,11 @@ class StorageManager {
           cover: pl.cover || '',
           color: pl.color || '#1e3264',
           curator: pl.curator || 'ZR',
-          track_ids: pl.trackIds || [],
+          track_ids: [...new Set(pl.trackIds || [])],
           updated_at: new Date().toISOString()
         }, { merge: true });
+        // Mark write timestamp so realtime listener doesn't overwrite
+        this._localPlaylistWrites[pl.id] = Date.now();
       }
       // Update in-memory
       this.userPlaylists = INITIAL_PLAYLISTS.map(pl => ({ ...pl }));
@@ -251,15 +254,16 @@ class StorageManager {
           };
         });
         // Smart merge: don't let remote overwrite recent local writes
-        // For each playlist, if we wrote locally within the last 2 seconds,
+        // For each playlist, if we wrote locally within the last 5 seconds OR have dirty flags,
         // merge remote trackIds INTO the local version (union) instead of replacing
         const now = Date.now();
         for (const remote of remotePlaylists) {
           const localIdx = this.userPlaylists.findIndex(p => p.id === remote.id);
           const lastLocalWrite = this._localPlaylistWrites[remote.id] || 0;
-          const isRecentLocalWrite = (now - lastLocalWrite) < 2000;
-          if (localIdx > -1 && isRecentLocalWrite) {
-            // Local has recent changes — merge remote into local (union of trackIds)
+          const hasDirtyFlag = !!this._playlistDirtyFlags[remote.id];
+          const isRecentLocalWrite = (now - lastLocalWrite) < 5000;
+          if (localIdx > -1 && (isRecentLocalWrite || hasDirtyFlag)) {
+            // Local has recent or pending changes — merge remote into local (union of trackIds)
             const localPl = this.userPlaylists[localIdx];
             const mergedTrackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
             this.userPlaylists[localIdx] = {
@@ -270,14 +274,20 @@ class StorageManager {
               cover: remote.cover || localPl.cover,
               color: remote.color || localPl.color
             };
-          } else {
-            // No recent local write — safe to replace
-            if (localIdx > -1) {
-              this.userPlaylists[localIdx] = remote;
-            } else if (!this._localPlaylistDeletes.has(remote.id)) {
-              // Only add if not locally deleted
-              this.userPlaylists.push(remote);
-            }
+          } else if (localIdx > -1) {
+            // No recent local write — safe to replace, but still merge trackIds as safety net
+            const localPl = this.userPlaylists[localIdx];
+            const localTracks = localPl.trackIds || [];
+            const remoteTracks = remote.trackIds || [];
+            // Always take union — prevents losing tracks in transit
+            const mergedTrackIds = [...new Set([...localTracks, ...remoteTracks])];
+            this.userPlaylists[localIdx] = {
+              ...remote,
+              trackIds: mergedTrackIds
+            };
+          } else if (!this._localPlaylistDeletes.has(remote.id)) {
+            // Only add if not locally deleted
+            this.userPlaylists.push(remote);
           }
         }
         // Remove playlists deleted remotely, but keep locally created ones not yet in Firestore
@@ -390,14 +400,34 @@ class StorageManager {
   // FIRESTORE WRITE HELPERS
   // ============================
 
-  async _persistPlaylist(playlist) {
+  /**
+   * Debounced persist — coalesces rapid writes into a single Firestore update.
+   * Each playlist has its own debounce timer (500ms).
+   */
+  _persistPlaylist(playlist) {
     if (!this.currentUserId) return;
     const playlistId = playlist.id;
+    // Clear any pending timer for this playlist
+    if (this._playlistPersistTimers[playlistId]) {
+      clearTimeout(this._playlistPersistTimers[playlistId]);
+    }
+    this._playlistDirtyFlags[playlistId] = true;
+    this._playlistPersistTimers[playlistId] = setTimeout(() => {
+      this._doPersistPlaylist(playlistId);
+    }, 500);
+  }
+
+  /**
+   * Actual Firestore write — always reads the LATEST in-memory state.
+   */
+  async _doPersistPlaylist(playlistId) {
+    if (!this.currentUserId) return;
     try {
-      // Always read the LATEST from in-memory to get all tracks
-      const latestPl = this.userPlaylists.find(p => p.id === playlistId) || playlist;
+      const latestPl = this.userPlaylists.find(p => p.id === playlistId);
+      if (!latestPl) return;
       // Track this local write so realtime listener doesn't overwrite it
       this._localPlaylistWrites[playlistId] = Date.now();
+      this._playlistDirtyFlags[playlistId] = false;
       await setDoc(doc(this._userPlaylistsRef(), playlistId), {
         user_id: this.currentUserId,
         playlist_id: latestPl.id,
@@ -406,7 +436,7 @@ class StorageManager {
         cover: latestPl.cover || '',
         color: latestPl.color || '#1e3264',
         curator: latestPl.curator || 'You',
-        track_ids: latestPl.trackIds || [],
+        track_ids: [...new Set(latestPl.trackIds || [])],
         updated_at: new Date().toISOString()
       }, { merge: true });
     } catch (error) {
@@ -642,6 +672,12 @@ class StorageManager {
     // Track as locally deleted so realtime listener doesn't re-add it
     this._localPlaylistDeletes.add(id);
     this._localPlaylistCreates.delete(id);
+    // Cancel any pending persist for this playlist
+    if (this._playlistPersistTimers[id]) {
+      clearTimeout(this._playlistPersistTimers[id]);
+      delete this._playlistPersistTimers[id];
+    }
+    delete this._playlistDirtyFlags[id];
     const deleted = this.userPlaylists.find(p => p.id === id);
     this.userPlaylists = this.userPlaylists.filter(p => p.id !== id);
     // Persist to Firestore — if it fails, restore the playlist in-memory
@@ -678,12 +714,15 @@ class StorageManager {
     const pl = this.userPlaylists.find(p => p.id === playlistId);
     if (!pl) return false;
     pl.trackIds = (pl.trackIds || []).filter(id => id !== trackId);
-    // Persist to Firestore
+    // Persist to Firestore (debounced)
     this._persistPlaylist(pl);
     // Refresh UI
     try {
       if (window.ui && typeof window.ui.renderPlaylist === 'function' && window.ui.currentView === 'playlist') {
         window.ui.renderPlaylist(playlistId);
+      }
+      if (window.ui && typeof window.ui.renderSidebarPlaylists === 'function') {
+        window.ui.renderSidebarPlaylists();
       }
     } catch (e) { console.debug('ui renderPlaylist failed after removeTrackFromPlaylist', e); }
     return true;
