@@ -51,6 +51,7 @@ class StorageManager {
     this._localPlaylistCreates = new Set(); // track locally created playlist IDs
     this._initialFetchDone = false;
     this._playlistDirtyFlags = {}; // track if a playlist has unsaved changes
+    this._playlistMaxTrackCount = {}; // track max tracks ever seen per playlist (safety net)
 
     // Listen to Firebase auth state changes
     onAuthStateChanged(auth, async (user) => {
@@ -140,14 +141,18 @@ class StorageManager {
       // Parse and store playlists
       this.userPlaylists = playlistsSnap.docs.map(d => {
         const data = d.data();
+        const trackIds = Array.isArray(data.track_ids) ? data.track_ids : [];
+        const plId = data.playlist_id || d.id;
+        // Initialize max track count from Firestore data
+        this._playlistMaxTrackCount[plId] = trackIds.length;
         return {
-          id: data.playlist_id || d.id,
+          id: plId,
           title: data.title || 'Untitled',
           description: data.description || '',
           curator: data.curator || 'You',
           cover: data.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
           color: data.color || '#1e3264',
-          trackIds: Array.isArray(data.track_ids) ? data.track_ids : [],
+          trackIds: trackIds,
           updated_at: data.updated_at || null
         };
       });
@@ -266,14 +271,30 @@ class StorageManager {
             // Local has recent or pending changes — merge remote into local (union of trackIds)
             const localPl = this.userPlaylists[localIdx];
             const mergedTrackIds = [...new Set([...(localPl.trackIds || []), ...(remote.trackIds || [])])];
-            this.userPlaylists[localIdx] = {
-              ...localPl,
-              trackIds: mergedTrackIds,
-              title: remote.title || localPl.title,
-              description: remote.description || localPl.description,
-              cover: remote.cover || localPl.cover,
-              color: remote.color || localPl.color
-            };
+            // SAFETY: never let track count regress below max ever seen
+            const maxCount = this._playlistMaxTrackCount[remote.id] || 0;
+            if (mergedTrackIds.length < maxCount) {
+              console.warn(`[storage] Track count regression detected for ${remote.id}: merged=${mergedTrackIds.length} < max=${maxCount}, keeping local`);
+              // Keep local trackIds entirely — remote data is stale
+              this.userPlaylists[localIdx] = {
+                ...localPl,
+                trackIds: [...new Set(localPl.trackIds || [])],
+                title: remote.title || localPl.title,
+                description: remote.description || localPl.description,
+                cover: remote.cover || localPl.cover,
+                color: remote.color || localPl.color
+              };
+            } else {
+              this._playlistMaxTrackCount[remote.id] = mergedTrackIds.length;
+              this.userPlaylists[localIdx] = {
+                ...localPl,
+                trackIds: mergedTrackIds,
+                title: remote.title || localPl.title,
+                description: remote.description || localPl.description,
+                cover: remote.cover || localPl.cover,
+                color: remote.color || localPl.color
+              };
+            }
           } else if (localIdx > -1) {
             // No recent local write — safe to replace, but still merge trackIds as safety net
             const localPl = this.userPlaylists[localIdx];
@@ -281,9 +302,15 @@ class StorageManager {
             const remoteTracks = remote.trackIds || [];
             // Always take union — prevents losing tracks in transit
             const mergedTrackIds = [...new Set([...localTracks, ...remoteTracks])];
+            // SAFETY: never let track count regress below max ever seen
+            const maxCount = this._playlistMaxTrackCount[remote.id] || 0;
+            const finalTrackIds = mergedTrackIds.length < maxCount
+              ? [...new Set(localTracks)] // keep local only — remote is stale
+              : mergedTrackIds;
+            this._playlistMaxTrackCount[remote.id] = Math.max(maxCount, finalTrackIds.length);
             this.userPlaylists[localIdx] = {
               ...remote,
-              trackIds: mergedTrackIds
+              trackIds: finalTrackIds
             };
           } else if (!this._localPlaylistDeletes.has(remote.id)) {
             // Only add if not locally deleted
@@ -425,9 +452,12 @@ class StorageManager {
     try {
       const latestPl = this.userPlaylists.find(p => p.id === playlistId);
       if (!latestPl) return;
-      // Track this local write so realtime listener doesn't overwrite it
+      // Snapshot the track count BEFORE persist so we can detect regression
+      const trackCountBefore = (latestPl.trackIds || []).length;
+      // Mark write timestamp — prevents realtime listener from overwriting
       this._localPlaylistWrites[playlistId] = Date.now();
-      this._playlistDirtyFlags[playlistId] = false;
+      // Snapshot what we are about to write
+      const trackIdsToWrite = [...new Set(latestPl.trackIds || [])];
       await setDoc(doc(this._userPlaylistsRef(), playlistId), {
         user_id: this.currentUserId,
         playlist_id: latestPl.id,
@@ -436,11 +466,14 @@ class StorageManager {
         cover: latestPl.cover || '',
         color: latestPl.color || '#1e3264',
         curator: latestPl.curator || 'You',
-        track_ids: [...new Set(latestPl.trackIds || [])],
+        track_ids: trackIdsToWrite,
         updated_at: new Date().toISOString()
       }, { merge: true });
+      // Clear dirty flag ONLY after Firestore confirms the write
+      this._playlistDirtyFlags[playlistId] = false;
     } catch (error) {
       console.warn('Could not persist playlist to Firestore:', error);
+      // Keep dirty flag so next attempt retries
     }
   }
 
@@ -697,6 +730,11 @@ class StorageManager {
     if (!pl.trackIds.includes(trackId)) {
       pl.trackIds.push(trackId);
       pl.trackIds = [...new Set(pl.trackIds)];
+      // Track max count so remote listener never regresses
+      this._playlistMaxTrackCount[playlistId] = Math.max(
+        this._playlistMaxTrackCount[playlistId] || 0,
+        pl.trackIds.length
+      );
       // Persist to Firestore
       this._persistPlaylist(pl);
       // Refresh UI
