@@ -342,7 +342,11 @@ class StorageManager {
     const unsubLocalTracks = onSnapshot(
       this._userLocalTracksRef(),
       (snap) => {
-        this.userLocalTracks = snap.docs.map(d => {
+        // MERGE Firestore tracks INTO in-memory tracks — never wipe them out.
+        // _persistLocalTracks does delete-all + re-add which briefly empties Firestore.
+        // If we replaced here, getTrackById() would return null for every track
+        // while the batch write is in progress — making playlists appear empty.
+        const remoteTracks = snap.docs.map(d => {
           const data = d.data();
           return {
             id: data.track_id || d.id,
@@ -356,6 +360,12 @@ class StorageManager {
             color: data.color || '#1e3264'
           };
         });
+        // Build a merged list: remote tracks + any local-only tracks not yet in Firestore
+        const remoteIds = new Set(remoteTracks.map(t => t.id));
+        const localOnly = this.userLocalTracks.filter(t => !remoteIds.has(t.id));
+        // Cap at 100 total
+        const merged = [...remoteTracks, ...localOnly].slice(0, 100);
+        this.userLocalTracks = merged;
       },
       (error) => console.warn('Local tracks listener error:', error)
     );
@@ -431,6 +441,13 @@ class StorageManager {
       this._localPlaylistWrites[playlistId] = Date.now();
       // Read the VERY LATEST trackIds (includes any adds made during wait)
       const trackIdsToWrite = [...new Set(latestPl.trackIds || [])];
+      // SAFETY: never overwrite a playlist that had tracks with empty tracks
+      const maxCount = this._playlistMaxTrackCount[playlistId] || 0;
+      if (trackIdsToWrite.length === 0 && maxCount > 0) {
+        console.warn(`[storage] BLOCKED empty track_ids write for ${playlistId} (max was ${maxCount}). Skipping.`);
+        this._playlistPersistLocks[playlistId] = false;
+        return;
+      }
       await setDoc(doc(this._userPlaylistsRef(), playlistId), {
         user_id: this.currentUserId,
         playlist_id: latestPl.id,
@@ -504,11 +521,16 @@ class StorageManager {
     if (!this.currentUserId) return;
     try {
       const items = tracks || this.userLocalTracks;
+      const itemIds = new Set(items.map(t => t.id));
       const existing = await getDocs(this._userLocalTracksRef());
       const batch = writeBatch(db);
+      // Only delete tracks that are NOT in the new list
       for (const d of existing.docs) {
-        batch.delete(d.ref);
+        if (!itemIds.has(d.id)) {
+          batch.delete(d.ref);
+        }
       }
+      // Add/update all tracks (set is upsert)
       for (const track of items) {
         batch.set(doc(this._userLocalTracksRef(), track.id), {
           track_id: track.id,
